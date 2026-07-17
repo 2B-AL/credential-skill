@@ -6,7 +6,7 @@
 
 建议 Skill 名称：`al-credential-sync`
 
-实现目录：`al-credential-sync/`
+实现目录：仓库根目录
 
 兼容说明：当前发布版 `credential-agent` 尚未完整提供本文建议的 JSON/JSONL 机器接口。Skill 优先探测机器接口；旧版 Agent 仅使用公开命令和退出码，不在脚本中解析中文输出。机器接口补齐后无需改变 Skill 的用户语义。
 
@@ -232,10 +232,10 @@ flowchart LR
 
 ## 7. Skill 包结构
 
-最终 Skill 目录建议为：
+仓库根目录本身就是 Skill，可直接作为安装源：
 
 ```text
-al-credential-sync/
+credential-skill/
 ├── SKILL.md
 ├── agents/
 │   └── openai.yaml
@@ -250,12 +250,14 @@ al-credential-sync/
 │   ├── browser-assist-macos.sh
 │   ├── browser-assist-windows.ps1
 │   └── wait-agent-state.py
-└── references/
+├── references/
     ├── agent-command-map.md
     ├── browser-installation.md
     ├── file-profiles.md
     ├── security-rules.md
     └── troubleshooting.md
+└── docs/
+    └── design.md
 ```
 
 `SKILL.md` 控制在 500 行以内，只保留：
