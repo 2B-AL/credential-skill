@@ -1,11 +1,11 @@
 ---
 name: al-credential-sync
-description: Install, update, configure, diagnose, pair, and operate the AL credential-agent and Chrome credential extension across personal computers and cloud desktops. Use when Codex needs to initialize AL credential sync, complete OAuth or device pairing, prepare or repair the Chrome extension, sync or revoke secrets, named environment variables, credential sets such as AK/SK, sensitive configuration files, browser sessions, dynamic credentials, or managed keys, inspect device or sync health, or recover an expired or unhealthy AL credential device.
+description: Install, update, configure, diagnose, pair, and operate the AL credential-agent and Chrome or Linux Chromium credential extension across personal computers and cloud desktops. Use when Codex needs to initialize AL credential sync, complete OAuth or device pairing, prepare or repair the Chrome or Chromium extension and Native Messaging host, sync or revoke secrets, named environment variables, credential sets such as AK/SK, sensitive configuration files, browser sessions, dynamic credentials, or managed keys, inspect device or sync health, or recover an expired or unhealthy AL credential device.
 ---
 
 # AL Credential Sync
 
-Treat `credential-agent` as the authority for authentication, device keys, encryption, sync, browser capture, and restore. Use this Skill only to install, invoke, observe, and safely assist the Agent. Never call Credential Vault internal APIs or manipulate Chrome profile data directly.
+Treat `credential-agent` as the authority for authentication, device keys, encryption, sync, browser capture, and restore. Use this Skill only to install, invoke, observe, and safely assist the Agent. Never call Credential Vault internal APIs or manipulate Chrome/Chromium profile data directly.
 
 ## Start every task
 
@@ -56,7 +56,7 @@ Do not re-enroll a device whose authorization is valid. Repeated setup should re
 
 Never store the pairing code in a file. Regenerate it after expiry.
 
-## Prepare and connect Chrome
+## Prepare and connect Chrome or Chromium
 
 Follow [browser-installation.md](references/browser-installation.md).
 
@@ -68,12 +68,14 @@ credential-agent browser setup --timeout 10m
 
 Run it in a yielded terminal session because it waits for extension connection and permissions. While it waits:
 
-1. Prefer visible UI automation through Chrome/computer control when available.
+1. Prefer visible UI automation through browser/computer control when available.
 2. Use semantic labels such as `开发者模式`, `Developer mode`, `加载未打包的扩展程序`, `Load unpacked`, `选择文件夹`, and `Select Folder`.
 3. Select only the Agent-managed `chrome-extension` directory already opened by the Agent.
-4. If UI automation is unavailable, leave Chrome and the directory open and ask for the single minimum action described in the browser reference.
+4. If UI automation is unavailable, leave the detected browser and the directory open and ask for the single minimum action described in the browser reference.
 5. Do not ask the user to return to the terminal or type that installation is complete. Let Agent heartbeat detection continue.
 6. On the extension options page, activate `启用全部支持的网站` or its English label, then let the Agent validate permissions.
+
+Site support is controlled by Credential Vault dynamic policy, not by an extension build-time registry. Trust only policies that the Agent fetched and verified. The extension heartbeat reports cached policy digests and granted origins; do not treat it as the policy authority or hardcode site names/counts. On a device-only cloud endpoint, a site's policy may first arrive with its restore task. If Agent opens the permission page, approve only the exact origins displayed for that policy and let Agent retry.
 
 Stop automation immediately on an unexpected permission dialog, locked desktop, disconnected remote desktop, or uncertain target directory.
 
@@ -114,8 +116,8 @@ For complete setup, require all of the following:
 - Background Agent is running.
 - OAuth checks pass on a personal computer; device-only cloud endpoints may skip them.
 - Native Messaging manifest is valid.
-- Chrome extension is connected and its running version matches the Agent-managed version.
-- All currently supported sites are authorized.
+- Chrome/Chromium extension is connected and its running version matches the Agent-managed version.
+- On a personal computer, all currently enabled Vault site policies are installed and their required origins are authorized. A device-only cloud endpoint may authorize a policy when its first restore task arrives.
 - `doctor --strict` exits successfully.
 
 If the user explicitly skips browser integration, report device setup as complete and browser setup as skipped. Never report a partial browser state as fully complete.

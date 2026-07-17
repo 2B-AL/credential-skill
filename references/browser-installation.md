@@ -12,7 +12,14 @@
 
 ## Capability boundary
 
-Official unmanaged Chrome on Windows/macOS cannot silently install a private unpacked extension. This Skill may prepare the signed extension and assist visible UI, but it must not modify Chrome profiles or bypass user-gesture requirements.
+Official unmanaged Chrome on Windows/macOS and Chromium on Linux cannot silently install a private unpacked extension. This Skill may prepare the signed extension and assist visible UI, but it must not modify browser profiles or bypass user-gesture requirements.
+
+On Linux, the Agent supports both native-host locations:
+
+- Chrome: `~/.config/google-chrome/NativeMessagingHosts`
+- Chromium: `~/.config/chromium/NativeMessagingHosts`
+
+Only one of these browsers needs to be installed. A missing manifest for the unused browser is healthy; an existing malformed or mismatched manifest is not.
 
 The current compatible Agent command is:
 
@@ -20,13 +27,13 @@ The current compatible Agent command is:
 credential-agent browser setup --timeout 10m
 ```
 
-It installs Native Messaging, downloads and verifies the signed extension artifact, prepares the managed directory, opens Chrome and the directory, waits for extension heartbeat, opens the permissions page, waits for supported-site authorization, and validates the running version.
+It installs Native Messaging, downloads and verifies the signed extension artifact, prepares the managed directory, opens the detected Chrome/Chromium browser and the directory, waits for extension heartbeat, opens the permissions page, waits for supported-site authorization, and validates the running version.
 
 ## State machine
 
 1. Start `browser setup` in a yielded terminal session.
 2. If it exits successfully, continue to `doctor --strict`.
-3. If it waits for connection, operate the visible Chrome UI or use the minimum manual fallback.
+3. If it waits for connection, operate the visible browser UI or use the minimum manual fallback.
 4. If an old extension is online, reload its card. If the running version remains old, remove only the AL Credential Center extension and load the Agent-managed directory again.
 5. Wait for Agent to observe the expected version; do not infer success from the card alone.
 6. Authorize all supported sites and wait for Agent heartbeat confirmation.
@@ -35,7 +42,7 @@ When future Agent versions expose `browser prepare/status/open-install/open-perm
 
 ## Visible UI assistance
 
-Use Chrome or computer control only on an unlocked visible desktop.
+Use browser or computer control only on an unlocked visible desktop.
 
 Semantic labels:
 
@@ -54,14 +61,14 @@ Procedure:
 5. Confirm the installed extension ID is `lnpfljjigmgmakiclchpnoehbbceomeb`.
 6. Let Agent determine whether the heartbeat version matches.
 
-Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify Chrome. Do not rely on Unix executable bits surviving GitHub ZIP installation.
+Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify the browser. On Linux, use the browser opened by Agent; it detects `google-chrome`, `google-chrome-stable`, and `chromium`. Do not rely on Unix executable bits surviving GitHub ZIP installation.
 
 ## Manual fallback
 
 If UI control is unavailable, display only:
 
 ```text
-Chrome 已打开。
+Chrome/Chromium 已打开。
 
 请点击“加载未打包的扩展程序”。
 文件夹选择窗口出现后，选择已经打开的 chrome-extension 文件夹。
@@ -73,9 +80,9 @@ Do not ask the user to type `Y` or confirm completion in the terminal. Leave Age
 
 ## Permission authorization
 
-After connection, Agent opens the extension options page. Use visible UI to click `启用全部支持的网站` and accept the expected Chrome host-permission prompt. Stop if the prompt requests permissions outside the displayed supported-site origins.
+After connection, Agent fetches the currently enabled Vault policies and opens the extension options page. Use visible UI to click `启用全部支持的网站` and accept the expected browser host-permission prompt. Stop if the prompt requests permissions outside the exact origins displayed for those policies.
 
-The supported list comes from extension heartbeat. Do not assume a fixed count or silently omit newly supported sites.
+The policy authority is Credential Vault. Extension heartbeat only reports the policy digests it cached and the origins the browser granted. Do not assume a fixed count or silently omit newly configured sites. On a device-only cloud endpoint, the first restore task may install one policy and trigger its exact permission prompt; leave Agent running so it can retry after approval.
 
 ## Upgrade repair
 
@@ -84,10 +91,10 @@ Directory presence is not success. Require:
 - fixed extension ID
 - recent Native Messaging heartbeat
 - running version equals prepared version
-- supported-site list is non-empty
-- all supported sites are authorized
+- running policy digests match the Agent-delivered policies
+- all policies already delivered to this endpoint have their required origins authorized
 
-If versions differ, reload the extension card. If Chrome continues running the old code, remove only this extension and load the same managed directory again.
+If versions differ, reload the extension card. If the browser continues running the old code, remove only this extension and load the same managed directory again.
 
 ## Final validation
 

@@ -21,7 +21,7 @@ AL 凭据中心已经具备以下核心能力：
 - 配对码批准云电脑。
 - 自定义 Secret、环境变量、复合凭据、配置文件和网站会话同步。
 - Agent 本地加密、设备密钥、设备授权和后台同步。
-- Chrome Native Messaging。
+- Chrome/Chromium Native Messaging；Linux 同时支持 Chrome 与 Chromium 的用户级 Native Messaging Host 目录。
 - 浏览器扩展制品签名、下载、校验、解压和版本检查。
 - macOS LaunchAgent、Windows 计划任务和 Linux `systemd --user`。
 
@@ -31,7 +31,7 @@ AL 凭据中心已经具备以下核心能力：
 - 用户需要自行下载、校验和安装 Agent。
 - 用户需要理解本地电脑与云电脑的不同初始化方式。
 - 用户需要复制配对码并在另一台设备批准。
-- Chrome 官方不允许未受管 Windows/macOS 静默安装商店外扩展。
+- Chrome 官方不允许未受管 Windows/macOS 静默安装商店外扩展；Linux Chromium 同样保留未打包扩展的可见安装确认。
 - 用户需要进入 `chrome://extensions/`，开启开发者模式并加载未打包扩展。
 - 用户需要进入扩展授权页并启用支持的网站。
 - 不同凭据类型对应不同 CLI 子命令，普通用户不应被要求记忆这些命令。
@@ -60,7 +60,7 @@ Skill 定位为 `credential-agent` 的安装和编排层，不重新实现凭据
        -> 浏览器会话捕获与恢复
 ```
 
-在“不使用 Chrome Web Store、不使用 Chrome Enterprise Core、不加入 AD/Entra ID、不修改 Chromium 内核”的约束下，官方 Chrome 无法保证完全静默安装扩展。
+在“不使用 Chrome Web Store、不使用 Chrome Enterprise Core、不加入 AD/Entra ID、不修改 Chromium 内核”的约束下，官方 Chrome/Chromium 无法保证完全静默安装扩展。
 
 因此浏览器安装采用以下顺序：
 
@@ -230,6 +230,23 @@ flowchart LR
     B --> E
 ```
 
+### 6.1 动态网站策略
+
+浏览器扩展是通用执行器，不再内置生产网站注册表。网站策略的权威来源是 Credential Vault 的 `config.sitePoliciesJSON`：
+
+```text
+受控站点配置
+  -> Vault 规范化与最小权限校验
+  -> policy_version + policy_digest
+  -> Agent 独立校验并通过 Native Messaging v2 下发
+  -> 扩展再次校验并申请精确 Origin
+  -> Capture/Restore 结果绑定同一策略摘要
+```
+
+新增普通网站时只修改 Vault 配置、递增 `policy_version` 并发布 Vault 配置；不重建 Agent 或扩展。只有新增扩展尚不具备的浏览器能力时，才需要升级协议或扩展。Manifest 的 `https://*/*` 只是 `optional_host_permissions` 声明上界，运行时禁止申请该通配权限。
+
+个人电脑在 `browser setup` 时获取全部启用策略。仅设备授权的云电脑不具备用户控制面 Token，可以在首次 Restore 任务中获得对应策略；若 Chrome 尚未授予该 Origin，扩展打开授权页，Agent 等待用户确认后自动重试。
+
 ## 7. Skill 包结构
 
 仓库根目录本身就是 Skill，可直接作为安装源：
@@ -280,7 +297,7 @@ credential-skill/
 ```yaml
 ---
 name: al-credential-sync
-description: Install, configure, diagnose, pair, and operate the AL credential-agent and Chrome credential extension across local computers and cloud desktops. Use when Codex needs to set up credential sync, install or update the Agent, complete OAuth or pairing, prepare the Chrome extension, sync secrets, environment variables, credential sets, sensitive configuration files, browser sessions, dynamic credentials, or managed keys, or diagnose AL credential synchronization.
+description: Install, configure, diagnose, pair, and operate the AL credential-agent and Chrome or Linux Chromium credential extension across local computers and cloud desktops. Use when Codex needs to set up credential sync, install or update the Agent, complete OAuth or pairing, prepare the Chrome or Chromium extension, sync secrets, environment variables, credential sets, sensitive configuration files, browser sessions, dynamic credentials, or managed keys, or diagnose AL credential synchronization.
 ---
 ```
 
@@ -679,7 +696,7 @@ Chrome 已打开。
 扩展连接后：
 
 1. 调用 `browser open-permissions`。
-2. 尝试点击“启用全部支持的网站”。
+2. Agent 获取并校验 Vault 当前动态策略，扩展展示并尝试启用这些网站。
 3. 处理 Chrome 权限确认。
 4. 调用 `browser wait --phase authorized`。
 
@@ -711,7 +728,7 @@ credential-agent doctor --strict --output json
 - Native Messaging Manifest 正确。
 - Chrome 扩展在线。
 - 扩展运行版本与准备版本一致。
-- 支持的网站已经全部授权。
+- 个人电脑上 Vault 当前启用策略已下发且全部授权；仅设备授权云电脑允许在首次任务时按站点授权。
 
 个人电脑额外检查：
 
@@ -882,7 +899,7 @@ credential-agent browser sync \
 
 规则：
 
-- 支持站点列表由 Agent 动态返回。
+- 支持站点列表由 Vault 动态策略决定，并由 Agent 校验后返回。
 - `--all` 只捕获已登录网站。
 - 未登录、需要验证和无法确认的网站单独列出。
 - 网站会话同步前保留 Agent 的明确确认。

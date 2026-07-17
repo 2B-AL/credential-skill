@@ -120,7 +120,7 @@ Selected sites:
 credential-agent browser sync --to DEVICE github reddit google
 ```
 
-Site support is dynamic. Do not hardcode a site count. Preserve Agent confirmation and report each site's result. Google policy may validate Google Search display login without guaranteeing Gmail, Drive, or Google Account sensitive pages.
+Site support comes from Credential Vault dynamic policy. Do not hardcode site names or a count, and do not infer support from files packaged with the extension. Agent verifies `policy_version` and `policy_digest` before the generic extension executes it. Preserve Agent confirmation and report each site's result. Google policy may validate Google Search display login without guaranteeing Gmail, Drive, or Google Account sensitive pages.
 
 Revoke central site consent/snapshot:
 
