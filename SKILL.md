@@ -9,10 +9,12 @@ Treat `credential-agent` as the authority for authentication, device keys, encry
 
 ## Start every task
 
+Resolve the absolute directory containing this `SKILL.md` before invoking bundled resources. The paths below are relative to that directory; do not assume the user's working directory is the Skill directory.
+
 1. Read [security-rules.md](references/security-rules.md). Apply it before running any command.
 2. Run the platform inspection script:
-   - macOS/Linux: `scripts/inspect-host.sh`
-   - Windows: `scripts/inspect-host.ps1`
+   - macOS/Linux: `sh <skill-directory>/scripts/inspect-host.sh`
+   - Windows: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <absolute-skill-directory>\scripts\inspect-host.ps1`
 3. Locate the Agent from the returned JSON. Never assume it is on `PATH`.
 4. Classify the request as setup, browser repair, sync, revoke/cleanup, status, or diagnosis.
 5. Read only the relevant reference:
@@ -23,11 +25,11 @@ Treat `credential-agent` as the authority for authentication, device keys, encry
 
 ## Install or update the Agent
 
-If the Agent is missing or cannot execute `help`, run the matching bootstrap wrapper. The wrappers download a signed release manifest, verify its Ed25519 signature, select the exact OS/architecture artifact, and verify length and SHA-256 before installing.
+If the Agent is missing or cannot execute `help`, run the matching bootstrap wrapper. The wrappers download a signed release manifest, verify its Ed25519 signature, select the exact OS/architecture artifact, and verify length and SHA-256 before installing. GitHub ZIP installation may clear Unix executable bits, so always invoke bundled scripts through their interpreter instead of executing the file directly.
 
-- macOS: `scripts/bootstrap-agent-macos.sh`
-- Linux: `scripts/bootstrap-agent-linux.sh`
-- Windows: `scripts/bootstrap-agent-windows.ps1`
+- macOS: `sh <skill-directory>/scripts/bootstrap-agent-macos.sh`
+- Linux: `sh <skill-directory>/scripts/bootstrap-agent-linux.sh`
+- Windows: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <absolute-skill-directory>\scripts\bootstrap-agent-windows.ps1`
 
 If the Agent exists, prefer its signed `update` path through the same wrapper. Do not paste `set -euo pipefail` into an interactive shell. Do not replace a running Windows executable manually.
 

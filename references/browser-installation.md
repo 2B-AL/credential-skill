@@ -54,7 +54,7 @@ Procedure:
 5. Confirm the installed extension ID is `lnpfljjigmgmakiclchpnoehbbceomeb`.
 6. Let Agent determine whether the heartbeat version matches.
 
-Use `scripts/browser-assist-macos.sh DIRECTORY` or `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify Chrome.
+Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify Chrome. Do not rely on Unix executable bits surviving GitHub ZIP installation.
 
 ## Manual fallback
 

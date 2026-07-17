@@ -271,6 +271,8 @@ credential-skill/
 
 具体平台命令、文件路径、错误码和操作细节放到 `references/`。
 
+通过 GitHub ZIP 安装时，安装器可能不保留 Unix 可执行位。Skill 必须使用 `sh scripts/*.sh`、`python3 scripts/*.py` 或 PowerShell 显式解释执行脚本，不得依赖文件模式位。
+
 ## 8. Skill 触发语义
 
 建议 Frontmatter：
