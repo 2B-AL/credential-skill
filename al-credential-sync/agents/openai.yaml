@@ -1,0 +1,4 @@
+interface:
+  display_name: "AL Credential Sync"
+  short_description: "Set up and operate AL credential sync safely"
+  default_prompt: "Use $al-credential-sync to set up or operate AL credential sync on this computer and guide me only when confirmation is required."
