@@ -1,6 +1,6 @@
 ---
 name: al-credential-sync
-description: Install, update, configure, diagnose, pair, and operate the AL credential-agent and Chrome or Linux Chromium credential extension across personal computers and cloud desktops. Use when Codex needs to initialize AL credential sync, complete OAuth or device pairing, prepare or repair the Chrome or Chromium extension and Native Messaging host, sync or revoke secrets, named environment variables, credential sets such as AK/SK, sensitive configuration files, browser sessions, dynamic credentials, or managed keys, inspect device or sync health, or recover an expired or unhealthy AL credential device.
+description: Install, update, configure, diagnose, pair, and operate the AL credential-agent and Chrome or Linux Chromium credential extension across personal computers, Linux sandboxes, and Windows cloud desktops. Use when Codex needs to initialize AL credential sync, complete OAuth or device pairing, prepare or repair the Chrome or Chromium extension and Native Messaging host, sync or revoke secrets, named environment variables, credential sets such as AK/SK, sensitive configuration files, browser sessions, dynamic credentials, or managed keys, inspect device or sync health, or recover an expired or unhealthy AL credential device.
 ---
 
 # AL Credential Sync
@@ -36,7 +36,7 @@ If the Agent exists and executes `help`, do not update it merely because a task 
 
 After installation, rerun host inspection and invoke the returned absolute Agent path with `help`.
 
-When bootstrap runs through AL Sandbox MCP and may exceed 30 seconds, start it with Sandbox `Bash(run_in_background=true)`, retain the returned `task_id`, and poll structured `TaskOutput` with `stdout_offset` and `stderr_offset`. Treat the task's terminal `status` and `exit_code` as authoritative; never infer remote completion from a local HTTP timeout. This path is only for non-sensitive bootstrap output. Never run setup or pairing through it because generic task output is retained in the sandbox task directory.
+Run bootstrap through the execution channel already provided for the target. If that channel supports durable background tasks, retain its task ID and poll its structured terminal status and exit code; otherwise use a yielded foreground session. Never infer remote completion from a client transport timeout. Use background execution only for non-sensitive bootstrap output, never setup or pairing.
 
 ## Initialize a personal computer
 
@@ -77,7 +77,7 @@ credential-agent browser wait --for permissions --timeout 10m --output json
 
 `prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides which UI action is actually needed. Do not reopen installation or permissions pages when the corresponding state is already ready.
 
-`open-install` and `open-permissions` report only that Chrome accepted an open request. Confirm the visible internal URL before clicking; on root AIO use Sandbox `BrowserNavigate` when Chrome ignores the launch request.
+`open-install` and `open-permissions` report only that Chrome accepted an open request. Confirm the visible internal URL through the browser-control channel already provided for the target, and navigate explicitly when Chrome ignores the launch request.
 
 For an older compatible Agent, use the combined fallback:
 
@@ -112,7 +112,7 @@ Stop automation immediately on an unexpected permission dialog, locked desktop, 
 
 Read [agent-command-map.md](references/agent-command-map.md) before selecting commands.
 
-For browser sync, fail fast on the personal/source computer before creating or initializing a new sandbox target:
+For browser sync, fail fast on the personal/source computer before creating or initializing a new target:
 
 ```text
 credential-agent browser validate --output jsonl SITE...
@@ -126,7 +126,7 @@ This uses `VALIDATE_SITE` only; it does not read, capture, or upload Cookie mate
 4. Keep Secret values in Agent's hidden input. Never place them in arguments, a script, clipboard, logs, or Codex context.
 5. For browser sessions and high-risk credential sets, preserve the Agent's explicit confirmation.
 6. Treat submission and delivery as different states. Report success only when the Agent reports the target received the item; otherwise report pending, partial, cancelled, or failed.
-7. For a sandbox target, retain the exact enrolled device ID and let the Sandbox Skill bind it to the current conversation. On archive, revoke that exact device from the personal Agent with `device revoke --yes --output json`, then clear the binding. Never revoke by display name.
+7. Retain the exact enrolled device ID returned for a temporary target. When that target is decommissioned, revoke the exact ID with `device revoke --yes --output json`; never revoke by display name.
 
 For Agent orchestration, once the exact target and site list have already been shown and approved, prefer `browser sync --to DEVICE --yes --output jsonl SITE...`. Consume JSONL phase events and the final result instead of answering localized prompts through a PTY. Fall back to interactive mode only when feature detection shows an older Agent.
 

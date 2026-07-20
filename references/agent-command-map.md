@@ -187,7 +187,7 @@ credential-agent browser revoke SITE
 
 Do not claim this automatically signs out every previously restored target browser unless Agent confirms a clear operation was delivered.
 
-For an archived sandbox, revoke the exact bound device ID with `credential-agent device revoke --yes --reason "sandbox archived" --output json DEVICE_ID`.
+When decommissioning any temporary target, revoke its exact device ID with `credential-agent device revoke --yes --reason "temporary target decommissioned" --output json DEVICE_ID`.
 
 ## Dynamic credentials and managed keys
 

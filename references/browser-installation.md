@@ -58,7 +58,7 @@ Both forms install Native Messaging, download and verify the signed extension ar
 5. Inspect `browser status` again. If every reported supported site is authorized, skip permission UI. Otherwise run `open-permissions`, approve exact origins, and yield on `wait --for permissions`.
 6. Continue to `doctor --strict --output json` and require Agent-observed state; do not infer success from an extension card or dialog alone.
 
-The `open-*` JSON contract is request-oriented: `requested=true` and `verified=false` means Chrome accepted a launch request, not that the internal page is visibly active. Confirm `chrome://extensions/` or the extension options URL through visible Browser state. On AIO, use Sandbox `BrowserNavigate` if the launch request did not change the page.
+The `open-*` JSON contract is request-oriented: `requested=true` and `verified=false` means Chrome accepted a launch request, not that the internal page is visibly active. Confirm `chrome://extensions/` or the extension options URL through the visible browser-control channel provided for the target, and navigate explicitly if the launch request did not change the page.
 
 If feature detection shows that staged commands are unavailable, run legacy `browser setup` in a yielded terminal and follow the same visible UI rules.
 

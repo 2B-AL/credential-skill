@@ -30,7 +30,7 @@ Use structured commands only if feature detection succeeds. On a legacy Agent, u
 - Existing executable lacks `update`: bootstrap may perform a verified direct install on macOS/Linux; on Windows do not overwrite a running file. Close Chrome or stop its Native Host only when the wrapper explicitly requests it.
 - Download interruption: keep the old executable, retry with proxy environment variables if authorized, and rely on manifest size/SHA-256 validation.
 - Signature/hash mismatch: stop. Do not install or retry from an untrusted alternate URL.
-- Sandbox MCP timeout during bootstrap: use background `Bash` plus structured `TaskOutput` cursors. A client HTTP timeout is not a task state; require task ID, terminal status, and exit code instead of increasing the global timeout.
+- Execution-channel timeout during bootstrap: if the channel supports durable background tasks, require its task ID, terminal status, and exit code. A client transport timeout is not a remote task state; otherwise resume or inspect through the same channel instead of blindly rerunning bootstrap.
 - Windows staged update lock: the background scheduled task and Chrome Native Host may both hold the executable. Use current Agent updater; do not repeatedly force-copy over the running binary.
 
 ## Device authorization
@@ -83,4 +83,4 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 
 ## Network
 
-Classify the failing origin: OAuth, Credential Vault, artifact TOS, or target website. Proxy settings may be provided through `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` when the user authorizes them. In an AIO sandbox, let the Sandbox Skill call its explicit `ConfigureBrowserProxy` tool before browser setup or sync; do not edit `/run/gem/browser-supervisor.json` manually. Keep this sandbox-only mechanism separate from Windows cloud-computer proxy handling. Never clear valid login/device state merely because a network request failed.
+Classify the failing origin: OAuth, Credential Vault, artifact TOS, or target website. Proxy settings may be provided through `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` when the user authorizes them. Browser or operating-system proxy configuration belongs to the target execution environment; use only its explicit managed interface and never edit browser supervisor files from this Skill. Never clear valid login/device state merely because a network request failed.
