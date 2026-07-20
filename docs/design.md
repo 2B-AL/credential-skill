@@ -21,7 +21,7 @@ AL 凭据中心已经具备以下核心能力：
 - 配对码批准云电脑。
 - 自定义 Secret、环境变量、复合凭据、配置文件和网站会话同步。
 - Agent 本地加密、设备密钥、设备授权和后台同步。
-- Chrome/Chromium Native Messaging；Linux 同时支持 Chrome 与 Chromium 的用户级 Native Messaging Host 目录。
+- Chrome/Chromium Native Messaging；Linux 同时支持默认目录和受管浏览器显式 `--user-data-dir` 对应的用户级 Native Messaging Host 目录。
 - 浏览器扩展制品签名、下载、校验、解压和版本检查。
 - macOS LaunchAgent、Windows 计划任务和 Linux `systemd --user`。
 
@@ -41,6 +41,8 @@ AL 凭据中心已经具备以下核心能力：
 ## 2. 设计结论
 
 Skill 定位为 `credential-agent` 的安装和编排层，不重新实现凭据协议、加密、认证或浏览器扩展逻辑。
+
+主机检查只从当前用户可见的浏览器启动参数中提取 `--user-data-dir` 绝对路径，不读取浏览器 Profile 内容。Skill 将该路径传给 Agent；目录校验和 Native Messaging manifest 写入仍由 Agent 负责。
 
 最终职责关系：
 

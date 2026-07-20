@@ -19,7 +19,9 @@ On Linux, the Agent supports both native-host locations:
 - Chrome: `~/.config/google-chrome/NativeMessagingHosts`
 - Chromium: `~/.config/chromium/NativeMessagingHosts`
 
-Only one of these browsers needs to be installed. A missing manifest for the unused browser is healthy; an existing malformed or mismatched manifest is not.
+Those are only the default user-data locations. Chrome/Chromium resolves the user-level Native Messaging directory from its effective user-data directory. If host inspection reports a process started with `--user-data-dir`, pass every reported absolute directory to Agent with repeatable `--user-data-dir` flags. Agent must validate and install the additional binding; the Skill must not copy or link manifests into browser data directories.
+
+Only one browser needs to be installed. A missing manifest for an unused default browser is healthy; an existing malformed or mismatched manifest is not.
 
 The current compatible Agent command is:
 
@@ -27,11 +29,17 @@ The current compatible Agent command is:
 credential-agent browser setup --timeout 10m
 ```
 
+For a managed browser with a custom user-data directory:
+
+```text
+credential-agent browser setup --user-data-dir /absolute/browser/user-data --timeout 10m
+```
+
 It installs Native Messaging, downloads and verifies the signed extension artifact, prepares the managed directory, opens the detected Chrome/Chromium browser and the directory, waits for extension heartbeat, opens the permissions page, waits for supported-site authorization, and validates the running version.
 
 ## State machine
 
-1. Start `browser setup` in a yielded terminal session.
+1. Start `browser setup` in a yielded terminal session, including every `chrome.user_data_dirs` value returned by host inspection.
 2. If it exits successfully, continue to `doctor --strict`.
 3. If it waits for connection, operate the visible browser UI or use the minimum manual fallback.
 4. If an old extension is online, reload its card. If the running version remains old, remove only the AL Credential Center extension and load the Agent-managed directory again.
@@ -61,7 +69,7 @@ Procedure:
 5. Confirm the installed extension ID is `lnpfljjigmgmakiclchpnoehbbceomeb`.
 6. Let Agent determine whether the heartbeat version matches.
 
-Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify the browser. On Linux, use the browser opened by Agent; it detects `google-chrome`, `google-chrome-stable`, and `chromium`. Do not rely on Unix executable bits surviving GitHub ZIP installation.
+Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify the browser. On Linux, use the browser opened by Agent; it detects `google-chrome`, `google-chrome-stable`, `chromium`, and `chrome`. Do not rely on Unix executable bits surviving GitHub ZIP installation.
 
 ## Manual fallback
 

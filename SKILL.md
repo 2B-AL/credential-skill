@@ -66,6 +66,14 @@ Use the Agent's current compatible command:
 credential-agent browser setup --timeout 10m
 ```
 
+Read `chrome.user_data_dirs` from the host inspection result. When it is non-empty, append each exact absolute directory as a repeatable flag:
+
+```text
+credential-agent browser setup --user-data-dir /absolute/browser/user-data --timeout 10m
+```
+
+This is required for managed Chrome/Chromium processes started with `--user-data-dir`. Never copy a Native Messaging manifest into that directory yourself; let Agent validate the directory and install the binding.
+
 Run it in a yielded terminal session because it waits for extension connection and permissions. While it waits:
 
 1. Prefer visible UI automation through browser/computer control when available.
