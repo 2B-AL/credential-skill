@@ -21,12 +21,14 @@ Use the absolute Agent path returned by host inspection. On PowerShell invoke it
 credential-agent setup --role personal --skip-browser
 credential-agent setup --role cloud --skip-browser
 credential-agent pair PAIR-CODE
+credential-agent pair --approve --output json PAIR-CODE
+credential-agent pair --deny --output json PAIR-CODE
 credential-agent status
 credential-agent doctor --strict
 credential-agent pull
 ```
 
-Prefer `status --output json`, `devices --output json`, and `doctor --strict --output json` only after feature detection confirms the installed Agent accepts them. Legacy releases expose human output; use their exit status rather than parsing translated strings.
+Use interactive `pair PAIR-CODE` when the Agent itself must collect the decision. After the exact pending device has already been shown and the user decided, use `--approve` or `--deny`; do not answer ReadLine prompts through a PTY. Structured pair output never includes the pairing code. Prefer `status --output json`, `devices --output json`, and `doctor --strict --output json` only after feature detection confirms the installed Agent accepts them. Legacy releases expose human output; use their exit status rather than parsing translated strings.
 
 ## Target selection
 
@@ -114,11 +116,29 @@ All currently authenticated supported sites:
 credential-agent browser sync --to DEVICE --all
 ```
 
+Use this only for an explicit all-sites request. Enabling all supported sites during browser setup grants the policy-defined host-permission capability; it does not select `--all` for later syncs.
+
 Selected sites:
 
 ```text
 credential-agent browser sync --to DEVICE github reddit google
 ```
+
+After the user has explicitly approved the exact target and selected sites, Agent orchestration should prefer stable phase output:
+
+```text
+credential-agent browser sync --to DEVICE --yes --output jsonl github
+```
+
+Do not drive the interactive confirmation by guessing prompt state or sending `Y\n` through a PTY. Use JSONL until the final `result` event, and retain the `operation_id` and Sync Job ID for diagnostics. Fall back to the interactive form only when the installed Agent does not support these flags.
+
+The `prepare_browser` phase returns policy counters under `details.policies`:
+
+- `checked`: selected policies compared with the current extension heartbeat.
+- `already_current`: exact digest matches that required no write.
+- `updated`: policies actually sent successfully to the extension.
+
+When `checked == already_current` and `updated == 0`, Agent skips both `UPDATE_SITE_POLICY` and the 30-second digest wait. It still validates login state, captures the selected sites, creates the Sync Job, and waits for target delivery.
 
 Site support comes from Credential Vault dynamic policy. Do not hardcode site names or a count, and do not infer support from files packaged with the extension. Agent verifies `policy_version` and `policy_digest` before the generic extension executes it. Preserve Agent confirmation and report each site's result. Google policy may validate Google Search display login without guaranteeing Gmail, Drive, or Google Account sensitive pages.
 

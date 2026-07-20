@@ -46,6 +46,8 @@ It installs Native Messaging, downloads and verifies the signed extension artifa
 5. Wait for Agent to observe the expected version; do not infer success from the card alone.
 6. Authorize all supported sites and wait for Agent heartbeat confirmation.
 
+This authorization step establishes the allowed capability range only. It must not be translated into a later `browser sync --all`; selected-site requests remain selected-site actions.
+
 When future Agent versions expose `browser prepare/status/open-install/open-permissions/wait`, prefer those machine-readable commands. Do not require them on older releases.
 
 ## Visible UI assistance
@@ -91,6 +93,8 @@ Do not ask the user to type `Y` or confirm completion in the terminal. Leave Age
 After connection, Agent fetches the currently enabled Vault policies and opens the extension options page. Use visible UI to click `启用全部支持的网站` and accept the expected browser host-permission prompt. Stop if the prompt requests permissions outside the exact origins displayed for those policies.
 
 The policy authority is Credential Vault. Extension heartbeat only reports the policy digests it cached and the origins the browser granted. Do not assume a fixed count or silently omit newly configured sites. On a device-only cloud endpoint, the first restore task may install one policy and trigger its exact permission prompt; leave Agent running so it can retry after approval.
+
+Repeated `browser setup` and selected-site sync are digest-aware. If the extension heartbeat already reports the exact Vault digest, Agent does not resend that policy or wait another 30 seconds for the same digest. Do not force a policy refresh merely because setup is being repeated; let Agent update only missing or stale policies.
 
 ## Upgrade repair
 

@@ -50,7 +50,7 @@ Do not re-enroll a device whose authorization is valid. Repeated setup should re
 
 1. Run `credential-agent setup --role cloud --skip-browser` in an interactive terminal.
 2. Let the Agent display the short-lived pairing code.
-3. If a separate, already logged-in personal-computer execution channel is available, run its absolute Agent path as `credential-agent pair CODE` there and obtain the user's confirmation through the Agent prompt.
+3. If a separate, already logged-in personal-computer execution channel is available, show the pending device to the user. After explicit approval, prefer its absolute Agent path with `credential-agent pair --approve --output json CODE`; use interactive `credential-agent pair CODE` only for an older Agent without these flags.
 4. Otherwise show exactly one local approval command. Do not copy device credentials or OAuth tokens between computers.
 5. Wait for the cloud setup process to finish, then complete browser setup and run `doctor --strict`.
 
@@ -85,6 +85,8 @@ Run it in a yielded terminal session because it waits for extension connection a
 
 Site support is controlled by Credential Vault dynamic policy, not by an extension build-time registry. Trust only policies that the Agent fetched and verified. The extension heartbeat reports cached policy digests and granted origins; do not treat it as the policy authority or hardcode site names/counts. On a device-only cloud endpoint, a site's policy may first arrive with its restore task. If Agent opens the permission page, approve only the exact origins displayed for that policy and let Agent retry.
 
+`启用全部支持的网站` is capability authorization, not a request to sync every site. For a user request naming GitHub, invoke selected-site sync for GitHub only. Use `browser sync --all` only when the user explicitly requests all supported authenticated sites.
+
 Stop automation immediately on an unexpected permission dialog, locked desktop, disconnected remote desktop, or uncertain target directory.
 
 ## Select a target and sync
@@ -97,6 +99,10 @@ Read [agent-command-map.md](references/agent-command-map.md) before selecting co
 4. Keep Secret values in Agent's hidden input. Never place them in arguments, a script, clipboard, logs, or Codex context.
 5. For browser sessions and high-risk credential sets, preserve the Agent's explicit confirmation.
 6. Treat submission and delivery as different states. Report success only when the Agent reports the target received the item; otherwise report pending, partial, cancelled, or failed.
+
+For Agent orchestration, once the exact target and site list have already been shown and approved, prefer `browser sync --to DEVICE --yes --output jsonl SITE...`. Consume JSONL phase events and the final result instead of answering localized prompts through a PTY. Fall back to interactive mode only when feature detection shows an older Agent.
+
+Treat JSONL as a stage protocol, not localized text: retain `operation_id`, read each phase `status` and `duration_ms`, and wait for the final `result`. For browser sync, inspect `details.policies.checked`, `already_current`, and `updated`; `updated=0` with every checked policy already current means Agent safely skipped policy writes and the 30-second policy heartbeat wait. This is not a skipped login capture or delivery.
 
 Never offer an all-environment-variables operation. Only sync names the user explicitly selected.
 

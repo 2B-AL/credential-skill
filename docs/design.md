@@ -438,30 +438,21 @@ Skill 不应解析以下文本：
 
 ### 11.1 输出格式
 
-非交互命令：
+当前 `pair` 和 `browser sync` 的稳定自动化接口统一使用：
 
 ```text
 --output human
 --output json
+--output jsonl
 ```
 
-交互和长流程：
-
-```text
---event-format human
---event-format jsonl
-```
-
-默认保持 `human`，保证现有用户兼容。
+默认保持 `human`。`json` 返回包含阶段数组的最终结果；`jsonl` 实时输出 `phase` 事件，并以一个 `result` 事件结束。每条机器事件包含稳定的 `operation_id`、`status`、`duration_ms`，失败时包含 `error_code`；同步任务还返回 Job ID 和各 item 状态。
 
 JSONL 示例：
 
 ```json
-{"event":"setup_started","role":"cloud"}
-{"event":"pair_code_created","code":"ABCD-EFGH","expires_at":"..."}
-{"event":"device_enrolled","device_id":"01..."}
-{"event":"daemon_started"}
-{"event":"setup_completed","browser_pending":true}
+{"schema_version":1,"type":"phase","command":"browser_sync","operation_id":"...","phase":"prepare_browser","status":"succeeded","duration_ms":8,"details":{"sites":["github"],"policies":{"checked":1,"already_current":1,"updated":0}}}
+{"schema_version":1,"type":"result","command":"browser_sync","operation_id":"...","status":"succeeded","duration_ms":1200,"details":{"sites":["github"],"job":{"id":"...","status":"succeeded"}}}
 ```
 
 JSONL 中不得包含：
@@ -473,14 +464,25 @@ JSONL 中不得包含：
 - Secret 值。
 - 私钥材料。
 
-### 11.2 建议新增或扩展的命令
+### 11.2 已实现的自动化命令
+
+```bash
+credential-agent pair --approve --output json CODE
+credential-agent pair --deny --output json CODE
+credential-agent browser sync --to DEVICE --yes --output json SITE...
+credential-agent browser sync --to DEVICE --yes --output jsonl SITE...
+credential-agent browser sync --to DEVICE --yes --output jsonl --all
+```
+
+机器输出模式必须显式提供决定、目标、网站范围和同步确认；缺少这些信息时立即失败，不得进入 ReadLine。配对码不得进入结构化输出。
+
+以下状态/浏览器分步接口仍属于后续扩展，Skill 使用前必须先做 feature detection：
 
 ```bash
 credential-agent status --output json
 credential-agent devices --output json
 credential-agent doctor --strict --output json
 credential-agent setup --skip-browser --event-format jsonl
-credential-agent pair CODE --event-format jsonl
 credential-agent browser prepare --output json
 credential-agent browser status --output json
 credential-agent browser open-install
@@ -586,7 +588,8 @@ Skill 只能直接控制当前拥有执行通道的设备。
 ```text
 云电脑生成配对码
   -> Codex 切换到本地执行通道
-  -> credential-agent pair CODE
+  -> 展示待配对设备并取得用户决定
+  -> credential-agent pair --approve|--deny --output json CODE
   -> 返回云电脑等待完成
 ```
 
@@ -896,13 +899,18 @@ credential-agent browser sync \
 ```bash
 credential-agent browser sync \
   --to win-cloud \
+  --yes \
+  --output jsonl \
   github reddit google
 ```
 
 规则：
 
 - 支持站点列表由 Vault 动态策略决定，并由 Agent 校验后返回。
+- “启用全部支持的网站”只授权能力范围，不选择同步范围；只有用户明确要求全部网站时使用 `--all`。
 - `--all` 只捕获已登录网站。
+- 单站点同步只比较所选策略的 heartbeat digest；已一致的策略不再发送 `UPDATE_SITE_POLICY`，也不进入 30 秒 digest 等待。
+- `details.policies.checked`、`already_current` 和 `updated` 用于判断策略快路径；策略未更新不代表跳过 Capture 或 Job delivery。
 - 未登录、需要验证和无法确认的网站单独列出。
 - 网站会话同步前保留 Agent 的明确确认。
 - Google 成功边界以 Agent/扩展策略定义为准，不承诺 Gmail、Drive 或账号中心完整会话。
