@@ -74,9 +74,11 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 - `pending_target`: verify target `doctor`, background Agent, network, and authorization.
 - A current target holds a bounded long poll for assignments; normal pickup should not require repeated manual `pull`. A persistent delay indicates daemon/network/authorization health, not a reason to increase Skill sleeps.
 - Machine output must end with a `result` event. Do not report success from an intermediate `phase` event, even when Capture succeeded.
+- `BROWSER_VALIDATION_TIMED_OUT` or `BROWSER_VALIDATION_FAILED` after restore means the browser mutation completed but login validation could not be confirmed. A current Agent retries `VALIDATE_SITE` once without restoring Cookie or Local Storage again. Do not restart the whole sync automatically; use the final job status.
+- An older target reporting `browser_restore_failed(BROWSER_OPERATION_FAILED)` after a visibly authenticated first-party page may be conflating validation with restore. Update the target Agent and extension before retrying; do not infer success from the page alone.
 - Partial browser sync: retry only failed sites after source/target validation.
 - Reauthentication required: the destination site or policy rejected the restored session. Do not bypass site validation.
 
 ## Network
 
-Classify the failing origin: OAuth, Credential Vault, artifact TOS, or target website. Proxy settings may be provided through `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` when the user authorizes them. Never clear valid login/device state merely because a network request failed.
+Classify the failing origin: OAuth, Credential Vault, artifact TOS, or target website. Proxy settings may be provided through `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` when the user authorizes them. In an AIO sandbox, let the Sandbox Skill call its explicit `ConfigureBrowserProxy` tool before browser setup or sync; do not edit `/run/gem/browser-supervisor.json` manually. Keep this sandbox-only mechanism separate from Windows cloud-computer proxy handling. Never clear valid login/device state merely because a network request failed.

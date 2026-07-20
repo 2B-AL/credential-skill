@@ -119,6 +119,8 @@ For Agent orchestration, once the exact target and site list have already been s
 
 Treat JSONL as a stage protocol, not localized text: retain `operation_id`, read each phase `status` and `duration_ms`, and wait for the final `result`. For browser sync, inspect `details.policies.checked`, `already_current`, and `updated`; `updated=0` with every checked policy already current means Agent safely skipped policy writes and the 30-second policy heartbeat wait. This is not a skipped login capture or delivery.
 
+If delivery reports `BROWSER_VALIDATION_TIMED_OUT` or `BROWSER_VALIDATION_FAILED`, do not resubmit the restore. A compatible target Agent already performs one validate-only retry after the browser mutation completes. Wait for the authoritative final job result; retry only `VALIDATE_SITE` during diagnosis, never the Cookie restore.
+
 Never offer an all-environment-variables operation. Only sync names the user explicitly selected.
 
 ## Diagnose and recover
