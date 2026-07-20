@@ -31,6 +31,7 @@ Secret values must be entered through Agent's no-echo prompt. Environment variab
 - Do not infer permission to sync every website from permission to sync one website.
 - Do not silently select among multiple devices with similar names.
 - Treat pairing codes as short-lived. Do not persist or reuse them.
+- Never run cloud setup or pairing through a generic background task that retains commands or stdout. On supported AIO Agents, use foreground `setup --pair-phase begin|complete`; keep Windows on its capability-reported interactive path.
 
 ## Browser automation
 

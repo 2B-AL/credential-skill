@@ -36,6 +36,8 @@ If the Agent exists and executes `help`, do not update it merely because a task 
 
 After installation, rerun host inspection and invoke the returned absolute Agent path with `help`.
 
+When bootstrap runs through AL Sandbox MCP and may exceed 30 seconds, start it with Sandbox `Bash(run_in_background=true)`, retain the returned `task_id`, and poll structured `TaskOutput` with `stdout_offset` and `stderr_offset`. Treat the task's terminal `status` and `exit_code` as authoritative; never infer remote completion from a local HTTP timeout. This path is only for non-sensitive bootstrap output. Never run setup or pairing through it because generic task output is retained in the sandbox task directory.
+
 ## Initialize a personal computer
 
 1. Determine the role from existing Agent state, then the user's explicit wording. Do not infer cloud role solely from virtualization.
@@ -49,8 +51,8 @@ Do not re-enroll a device whose authorization is valid. Repeated setup should re
 
 ## Initialize a cloud or peer computer
 
-1. Run `credential-agent setup --role cloud --skip-browser` in an interactive terminal. If capabilities report `daemon.manager=external`, append `--daemon-manager external`; otherwise omit it. Do not apply AIO external-supervisor assumptions to Windows cloud computers.
-2. Let the Agent display the short-lived pairing code.
+1. If capabilities report the root AIO contract `runtime.kind=aio_sandbox` and `daemon.manager=external`, use foreground `setup --role cloud --skip-browser --daemon-manager external --pair-phase begin --output json`, approve its short-lived pairing code, then run `setup --role cloud --skip-browser --daemon-manager external --pair-phase complete --pair-timeout 2m --output json`. Never put either call in a generic background task; the Agent private state does not persist the pairing code.
+2. On Windows or an older Agent without phased setup, run `credential-agent setup --role cloud --skip-browser` interactively and use its reported daemon manager. Do not apply AIO external-supervisor assumptions to Windows cloud computers.
 3. If a separate, already logged-in personal-computer execution channel is available, show the pending device to the user. After explicit approval, prefer its absolute Agent path with `credential-agent pair --approve --output json CODE`; use interactive `credential-agent pair CODE` only for an older Agent without these flags.
 4. Otherwise show exactly one local approval command. Do not copy device credentials or OAuth tokens between computers.
 5. Wait for the cloud setup process to finish, then complete browser setup and run `doctor --strict`.
@@ -74,6 +76,8 @@ credential-agent browser wait --for permissions --timeout 10m --output json
 ```
 
 `prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides which UI action is actually needed. Do not reopen installation or permissions pages when the corresponding state is already ready.
+
+`open-install` and `open-permissions` report only that Chrome accepted an open request. Confirm the visible internal URL before clicking; on root AIO use Sandbox `BrowserNavigate` when Chrome ignores the launch request.
 
 For an older compatible Agent, use the combined fallback:
 
@@ -108,12 +112,21 @@ Stop automation immediately on an unexpected permission dialog, locked desktop, 
 
 Read [agent-command-map.md](references/agent-command-map.md) before selecting commands.
 
+For browser sync, fail fast on the personal/source computer before creating or initializing a new sandbox target:
+
+```text
+credential-agent browser validate --output jsonl SITE...
+```
+
+This uses `VALIDATE_SITE` only; it does not read, capture, or upload Cookie material. Continue target provisioning only when the final result is `succeeded` and every requested site is `authenticated`.
+
 1. Run `credential-agent devices`. If `devices --output json` is supported, prefer it.
 2. Match an explicitly named target exactly. Auto-select only when exactly one active peer/cloud target exists.
 3. Summarize resource names/types and the target before invoking Agent. Never reveal values.
 4. Keep Secret values in Agent's hidden input. Never place them in arguments, a script, clipboard, logs, or Codex context.
 5. For browser sessions and high-risk credential sets, preserve the Agent's explicit confirmation.
 6. Treat submission and delivery as different states. Report success only when the Agent reports the target received the item; otherwise report pending, partial, cancelled, or failed.
+7. For a sandbox target, retain the exact enrolled device ID and let the Sandbox Skill bind it to the current conversation. On archive, revoke that exact device from the personal Agent with `device revoke --yes --output json`, then clear the binding. Never revoke by display name.
 
 For Agent orchestration, once the exact target and site list have already been shown and approved, prefer `browser sync --to DEVICE --yes --output jsonl SITE...`. Consume JSONL phase events and the final result instead of answering localized prompts through a PTY. Fall back to interactive mode only when feature detection shows an older Agent.
 

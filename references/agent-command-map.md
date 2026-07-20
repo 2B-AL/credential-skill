@@ -21,6 +21,8 @@ Use the absolute Agent path returned by host inspection. On PowerShell invoke it
 credential-agent capabilities --output json
 credential-agent setup --role personal --skip-browser
 credential-agent setup --role cloud --skip-browser
+credential-agent setup --role cloud --skip-browser --daemon-manager external --pair-phase begin --output json
+credential-agent setup --role cloud --skip-browser --daemon-manager external --pair-phase complete --pair-timeout 2m --output json
 credential-agent pair PAIR-CODE
 credential-agent pair --approve --output json PAIR-CODE
 credential-agent pair --deny --output json PAIR-CODE
@@ -36,6 +38,8 @@ Run `capabilities --output json` before setup when supported. Its `daemon.manage
 - `none`: the caller intentionally owns foreground lifecycle.
 
 Do not derive this choice from OS alone. In particular, Windows cloud computers continue to use their reported platform manager; AIO sandbox images report `runtime.kind=aio_sandbox` and `daemon.manager=external`.
+
+For AIO orchestration, use phased setup so the pairing code is returned by a fast foreground command and never retained by a generic background task. Use the regular interactive setup path on Windows or older Agents.
 
 Use interactive `pair PAIR-CODE` when the Agent itself must collect the decision. After the exact pending device has already been shown and the user decided, use `--approve` or `--deny`; do not answer ReadLine prompts through a PTY. Structured pair output never includes the pairing code. Prefer `status --output json`, `devices --output json`, and `doctor --strict --output json` only after feature detection confirms the installed Agent accepts them. Legacy releases expose human output; use their exit status rather than parsing translated strings.
 
@@ -147,6 +151,14 @@ Selected sites:
 credential-agent browser sync --to DEVICE github reddit google
 ```
 
+Read-only source login preflight:
+
+```text
+credential-agent browser validate --output jsonl github
+```
+
+Run this before provisioning a new target. It sends `VALIDATE_SITE` through the connected extension and reports per-site status without capture, upload, binding creation, or target selection.
+
 After the user has explicitly approved the exact target and selected sites, Agent orchestration should prefer stable phase output:
 
 ```text
@@ -174,6 +186,8 @@ credential-agent browser revoke SITE
 ```
 
 Do not claim this automatically signs out every previously restored target browser unless Agent confirms a clear operation was delivered.
+
+For an archived sandbox, revoke the exact bound device ID with `credential-agent device revoke --yes --reason "sandbox archived" --output json DEVICE_ID`.
 
 ## Dynamic credentials and managed keys
 

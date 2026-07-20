@@ -30,6 +30,7 @@ Use structured commands only if feature detection succeeds. On a legacy Agent, u
 - Existing executable lacks `update`: bootstrap may perform a verified direct install on macOS/Linux; on Windows do not overwrite a running file. Close Chrome or stop its Native Host only when the wrapper explicitly requests it.
 - Download interruption: keep the old executable, retry with proxy environment variables if authorized, and rely on manifest size/SHA-256 validation.
 - Signature/hash mismatch: stop. Do not install or retry from an untrusted alternate URL.
+- Sandbox MCP timeout during bootstrap: use background `Bash` plus structured `TaskOutput` cursors. A client HTTP timeout is not a task state; require task ID, terminal status, and exit code instead of increasing the global timeout.
 - Windows staged update lock: the background scheduled task and Chrome Native Host may both hold the executable. Use current Agent updater; do not repeatedly force-copy over the running binary.
 
 ## Device authorization
@@ -54,6 +55,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 - Agent orchestration appears stuck after sending `Y\n`: the interactive CLI uses raw terminal ReadLine and may still be waiting for carriage return. Stop guessing prompt state; after explicit user approval use `pair --approve --output json CODE` on a compatible Agent.
 - Structured pair returns `CLI_USAGE`: supply exactly one of `--approve` or `--deny`, plus the pairing code.
 - Do not send pairing codes through persistent files or logs.
+- On root AIO, prefer foreground `setup --pair-phase begin --output json`, approve the exact pending device, then call `setup --pair-phase complete --output json`. On Windows, continue using its reported platform manager and interactive setup.
 
 ## Browser integration
 
