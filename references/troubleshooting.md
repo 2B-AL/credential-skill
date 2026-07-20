@@ -16,12 +16,13 @@
 Run from the absolute Agent path:
 
 ```text
-credential-agent status
-credential-agent doctor --strict
-credential-agent devices
+credential-agent capabilities --output json
+credential-agent status --output json
+credential-agent doctor --strict --output json
+credential-agent devices --output json
 ```
 
-Prefer JSON output only if feature detection succeeds. Do not parse localized prose in scripts. Keep diagnostic logs free of sensitive values.
+Use structured commands only if feature detection succeeds. On a legacy Agent, use human commands plus exit status; do not parse localized prose in scripts. Keep diagnostic logs free of sensitive values.
 
 ## Agent installation/update
 
@@ -40,7 +41,9 @@ Prefer JSON output only if feature detection succeeds. Do not parse localized pr
 
 ## Background Agent
 
-Rerun role-appropriate `setup --skip-browser`; it repairs LaunchAgent, `systemd --user`, or Windows Scheduled Task. Do not manually edit task XML or plist files as the first response.
+First inspect `capabilities.daemon`. If `manager=platform`, rerun role-appropriate `setup --skip-browser`; it repairs LaunchAgent, `systemd --user`, or Windows Scheduled Task. Do not manually edit task XML or plist files as the first response.
+
+If `manager=external`, do not install a platform service. The owning image/desktop supervisor must already be running; in AIO, the root watcher may start before enrollment and should make `daemon.healthy=true` as soon as the signed Agent binary appears. Check the external supervisor and binary path, then rerun setup with `--daemon-manager external`. `manager=none` means the caller must keep a foreground Agent alive.
 
 On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent doctor`.
 
@@ -55,6 +58,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 ## Browser integration
 
 - Chrome opens but not `chrome://extensions/`: rerun Agent browser setup, then use the safe browser-assist script and visible UI.
+- For staged setup, inspect `browser status --output json` before reopening anything. Run `open-install` only for disconnected/version-mismatched state, and run `open-permissions` only after `configure-policies` when authorization is incomplete.
 - Extension directory exists but Agent waits: verify the fixed ID, reload the extension, and wait for heartbeat. Directory presence is insufficient.
 - Running/prepared versions differ: reload; if still mismatched, remove only the AL extension and load the managed directory again.
 - Options page says enabled but Agent reports incomplete: click enable-all again, accept the Chrome permission prompt, and wait for a new heartbeat.
@@ -68,6 +72,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 - Target receives before manual `pull`: normal; background Agent may have already consumed the assignment.
 - `pull` says nothing pending after source reports received: normal and not a version mismatch.
 - `pending_target`: verify target `doctor`, background Agent, network, and authorization.
+- A current target holds a bounded long poll for assignments; normal pickup should not require repeated manual `pull`. A persistent delay indicates daemon/network/authorization health, not a reason to increase Skill sleeps.
 - Machine output must end with a `result` event. Do not report success from an intermediate `phase` event, even when Capture succeeded.
 - Partial browser sync: retry only failed sites after source/target validation.
 - Reauthentication required: the destination site or policy rejected the restored session. Do not bypass site validation.

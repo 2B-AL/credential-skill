@@ -23,7 +23,19 @@ Those are only the default user-data locations. Chrome/Chromium resolves the use
 
 Only one browser needs to be installed. A missing manifest for an unused default browser is healthy; an existing malformed or mismatched manifest is not.
 
-The current compatible Agent command is:
+Current Agents expose a staged, machine-readable workflow:
+
+```text
+credential-agent browser prepare [--user-data-dir DIR ...] --output json
+credential-agent browser status --output json
+credential-agent browser open-install --output json
+credential-agent browser wait --for connected --timeout 10m --output json
+credential-agent browser configure-policies --output json
+credential-agent browser open-permissions --output json
+credential-agent browser wait --for permissions --timeout 10m --output json
+```
+
+The compatible fallback for older Agents is:
 
 ```text
 credential-agent browser setup --timeout 10m
@@ -35,20 +47,22 @@ For a managed browser with a custom user-data directory:
 credential-agent browser setup --user-data-dir /absolute/browser/user-data --timeout 10m
 ```
 
-It installs Native Messaging, downloads and verifies the signed extension artifact, prepares the managed directory, opens the detected Chrome/Chromium browser and the directory, waits for extension heartbeat, opens the permissions page, waits for supported-site authorization, and validates the running version.
+Both forms install Native Messaging, download and verify the signed extension artifact, prepare the managed directory, connect the detected Chrome/Chromium extension, deliver current dynamic policies, authorize supported-site origins, and validate the running version. The staged form separates local preparation, UI action, policy delivery, and waits so an Agent orchestrator does not hold an opaque 10-minute command or repeat completed UI steps.
 
 ## State machine
 
-1. Start `browser setup` in a yielded terminal session, including every `chrome.user_data_dirs` value returned by host inspection.
-2. If it exits successfully, continue to `doctor --strict`.
-3. If it waits for connection, operate the visible browser UI or use the minimum manual fallback.
-4. If an old extension is online, reload its card. If the running version remains old, remove only the AL Credential Center extension and load the Agent-managed directory again.
-5. Wait for Agent to observe the expected version; do not infer success from the card alone.
-6. Authorize all supported sites and wait for Agent heartbeat confirmation.
+1. Run `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
+2. Run `browser status --output json`. If `connected=true` and `running_version == prepared_version`, skip installation UI. Otherwise run `open-install`, operate the visible browser, and yield on `wait --for connected`.
+3. If an old extension is online, reload its card. If the running version remains old, remove only the AL Credential Center extension and load the Agent-managed directory again.
+4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first restore task will deliver the exact policy.
+5. Inspect `browser status` again. If every reported supported site is authorized, skip permission UI. Otherwise run `open-permissions`, approve exact origins, and yield on `wait --for permissions`.
+6. Continue to `doctor --strict --output json` and require Agent-observed state; do not infer success from an extension card or dialog alone.
+
+If feature detection shows that staged commands are unavailable, run legacy `browser setup` in a yielded terminal and follow the same visible UI rules.
 
 This authorization step establishes the allowed capability range only. It must not be translated into a later `browser sync --all`; selected-site requests remain selected-site actions.
 
-When future Agent versions expose `browser prepare/status/open-install/open-permissions/wait`, prefer those machine-readable commands. Do not require them on older releases.
+Do not require staged commands on older releases and do not update a healthy Agent solely to avoid the legacy fallback unless the task requires deterministic machine orchestration.
 
 ## Visible UI assistance
 

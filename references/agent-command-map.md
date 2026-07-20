@@ -18,6 +18,7 @@ Use the absolute Agent path returned by host inspection. On PowerShell invoke it
 ## Device lifecycle
 
 ```text
+credential-agent capabilities --output json
 credential-agent setup --role personal --skip-browser
 credential-agent setup --role cloud --skip-browser
 credential-agent pair PAIR-CODE
@@ -27,6 +28,14 @@ credential-agent status
 credential-agent doctor --strict
 credential-agent pull
 ```
+
+Run `capabilities --output json` before setup when supported. Its `daemon.manager` is authoritative for lifecycle orchestration:
+
+- `platform`: launchd/systemd or the current platform's normal user-service manager.
+- `external`: an image or desktop supervisor owns the long-running process; append `--daemon-manager external` to setup and never install a second platform daemon.
+- `none`: the caller intentionally owns foreground lifecycle.
+
+Do not derive this choice from OS alone. In particular, Windows cloud computers continue to use their reported platform manager; AIO sandbox images report `runtime.kind=aio_sandbox` and `daemon.manager=external`.
 
 Use interactive `pair PAIR-CODE` when the Agent itself must collect the decision. After the exact pending device has already been shown and the user decided, use `--approve` or `--deny`; do not answer ReadLine prompts through a PTY. Structured pair output never includes the pairing code. Prefer `status --output json`, `devices --output json`, and `doctor --strict --output json` only after feature detection confirms the installed Agent accepts them. Legacy releases expose human output; use their exit status rather than parsing translated strings.
 
@@ -110,6 +119,20 @@ credential-agent file remove --to DEVICE REF
 
 ## Browser sessions
 
+Staged setup/repair commands for current Agents:
+
+```text
+credential-agent browser prepare [--user-data-dir DIR ...] --output json
+credential-agent browser status --output json
+credential-agent browser open-install --output json
+credential-agent browser wait --for connected --timeout 10m --output json
+credential-agent browser configure-policies --output json
+credential-agent browser open-permissions --output json
+credential-agent browser wait --for permissions --timeout 10m --output json
+```
+
+Call `open-*` only when `browser status` proves the corresponding action is needed. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; that endpoint receives the exact policy with its first restore task. Use legacy `browser setup` as the feature-detected fallback.
+
 All currently authenticated supported sites:
 
 ```text
@@ -139,6 +162,8 @@ The `prepare_browser` phase returns policy counters under `details.policies`:
 - `updated`: policies actually sent successfully to the extension.
 
 When `checked == already_current` and `updated == 0`, Agent skips both `UPDATE_SITE_POLICY` and the 30-second digest wait. It still validates login state, captures the selected sites, creates the Sync Job, and waits for target delivery.
+
+Current Agent/extension pairs advertise combined `CAPTURE_AND_VALIDATE` and `RESTORE_AND_VALIDATE` tasks through the extension heartbeat. Agent uses them automatically and falls back to the older two-task protocol when the extension does not advertise support; the Skill must not choose task types itself.
 
 Site support comes from Credential Vault dynamic policy. Do not hardcode site names or a count, and do not infer support from files packaged with the extension. Agent verifies `policy_version` and `policy_digest` before the generic extension executes it. Preserve Agent confirmation and report each site's result. Google policy may validate Google Search display login without guaranteeing Gmail, Drive, or Google Account sensitive pages.
 

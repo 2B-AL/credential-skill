@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 
 LINUX_CHROMIUM_EXECUTABLES = {
@@ -161,7 +162,27 @@ def agent_path(goos: str) -> Path:
     if goos == "windows":
         local = os.environ.get("LOCALAPPDATA", "")
         return Path(local) / "AL" / "CredentialAgent" / "credential-agent.exe" if local else Path()
-    return Path.home() / ".local" / "bin" / "credential-agent"
+    candidates = [
+        Path.home() / ".local" / "bin" / "credential-agent",
+        Path("/usr/local/bin/credential-agent"),
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[0]
+
+
+def runtime_hints() -> dict[str, Optional[str]]:
+    kind = os.environ.get("CREDENTIAL_AGENT_RUNTIME_KIND", "").strip()
+    if not kind.replace("_", "").replace("-", "").isalnum():
+        kind = ""
+    daemon_manager = os.environ.get("CREDENTIAL_AGENT_DAEMON_MANAGER", "").strip()
+    if daemon_manager not in {"platform", "external", "none"}:
+        daemon_manager = ""
+    return {
+        "kind": kind or "desktop",
+        "daemon_manager_hint": daemon_manager or None,
+    }
 
 
 def main() -> None:
@@ -175,6 +196,7 @@ def main() -> None:
         "os": goos,
         "arch": normalized_arch(),
         "interactive": bool(sys.stdin.isatty() and sys.stdout.isatty()),
+        "runtime": runtime_hints(),
         "chrome": {
             "installed": bool(chrome),
             "executable": chrome or None,

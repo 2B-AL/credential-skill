@@ -16,8 +16,9 @@ Resolve the absolute directory containing this `SKILL.md` before invoking bundle
    - macOS/Linux: `sh <skill-directory>/scripts/inspect-host.sh`
    - Windows: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <absolute-skill-directory>\scripts\inspect-host.ps1`
 3. Locate the Agent from the returned JSON. Never assume it is on `PATH`.
-4. Classify the request as setup, browser repair, sync, revoke/cleanup, status, or diagnosis.
-5. Read only the relevant reference:
+4. If the Agent supports it, run its absolute path with `capabilities --output json` once and retain the result for this task. Use `runtime.kind`, `enrollment`, `daemon.manager`, `daemon.healthy`, and `browser` as the orchestration contract. On an older Agent, feature-detect commands from `help`; do not infer runtime type from virtualization or parse localized output.
+5. Classify the request as setup, browser repair, sync, revoke/cleanup, status, or diagnosis.
+6. Read only the relevant reference:
    - Setup or browser work: [browser-installation.md](references/browser-installation.md)
    - Sync or command selection: [agent-command-map.md](references/agent-command-map.md)
    - Configuration files: [file-profiles.md](references/file-profiles.md)
@@ -31,14 +32,14 @@ If the Agent is missing or cannot execute `help`, run the matching bootstrap wra
 - Linux: `sh <skill-directory>/scripts/bootstrap-agent-linux.sh`
 - Windows: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <absolute-skill-directory>\scripts\bootstrap-agent-windows.ps1`
 
-If the Agent exists, prefer its signed `update` path through the same wrapper. Do not paste `set -euo pipefail` into an interactive shell. Do not replace a running Windows executable manually.
+If the Agent exists and executes `help`, do not update it merely because a task started. Use the signed `update` path only when the user requested an update, capability detection shows that the installed version lacks a command required for the task, or diagnosis identifies a broken/outdated Agent. Do not paste `set -euo pipefail` into an interactive shell. Do not replace a running Windows executable manually.
 
 After installation, rerun host inspection and invoke the returned absolute Agent path with `help`.
 
 ## Initialize a personal computer
 
 1. Determine the role from existing Agent state, then the user's explicit wording. Do not infer cloud role solely from virtualization.
-2. Run `credential-agent setup --role personal --skip-browser` in an interactive terminal.
+2. Run `credential-agent setup --role personal --skip-browser` in an interactive terminal. If capabilities report `daemon.manager=external`, append `--daemon-manager external`; this is the AIO/external-supervisor contract. Otherwise omit the flag and let the Agent use the platform manager.
 3. Let the Agent open OAuth Device Flow. Do not read, fill, or log passwords, verification codes, access tokens, or refresh tokens.
 4. Wait for setup to exit successfully. On cancellation, preserve existing state and stop.
 5. Complete the browser workflow below unless the user explicitly asks to skip it.
@@ -48,7 +49,7 @@ Do not re-enroll a device whose authorization is valid. Repeated setup should re
 
 ## Initialize a cloud or peer computer
 
-1. Run `credential-agent setup --role cloud --skip-browser` in an interactive terminal.
+1. Run `credential-agent setup --role cloud --skip-browser` in an interactive terminal. If capabilities report `daemon.manager=external`, append `--daemon-manager external`; otherwise omit it. Do not apply AIO external-supervisor assumptions to Windows cloud computers.
 2. Let the Agent display the short-lived pairing code.
 3. If a separate, already logged-in personal-computer execution channel is available, show the pending device to the user. After explicit approval, prefer its absolute Agent path with `credential-agent pair --approve --output json CODE`; use interactive `credential-agent pair CODE` only for an older Agent without these flags.
 4. Otherwise show exactly one local approval command. Do not copy device credentials or OAuth tokens between computers.
@@ -60,7 +61,21 @@ Never store the pairing code in a file. Regenerate it after expiry.
 
 Follow [browser-installation.md](references/browser-installation.md).
 
-Use the Agent's current compatible command:
+For an Agent exposing the staged browser commands, prefer this state-driven sequence:
+
+```text
+credential-agent browser prepare [--user-data-dir DIR ...] --output json
+credential-agent browser status --output json
+credential-agent browser open-install --output json       # only when disconnected/version-mismatched
+credential-agent browser wait --for connected --timeout 10m --output json
+credential-agent browser configure-policies --output json
+credential-agent browser open-permissions --output json   # only when required
+credential-agent browser wait --for permissions --timeout 10m --output json
+```
+
+`prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides which UI action is actually needed. Do not reopen installation or permissions pages when the corresponding state is already ready.
+
+For an older compatible Agent, use the combined fallback:
 
 ```text
 credential-agent browser setup --timeout 10m
@@ -74,7 +89,7 @@ credential-agent browser setup --user-data-dir /absolute/browser/user-data --tim
 
 This is required for managed Chrome/Chromium processes started with `--user-data-dir`. Never copy a Native Messaging manifest into that directory yourself; let Agent validate the directory and install the binding.
 
-Run it in a yielded terminal session because it waits for extension connection and permissions. While it waits:
+Run `browser wait` or the legacy `browser setup` in a yielded terminal session because it waits for extension connection and permissions. While it waits:
 
 1. Prefer visible UI automation through browser/computer control when available.
 2. Use semantic labels such as `开发者模式`, `Developer mode`, `加载未打包的扩展程序`, `Load unpacked`, `选择文件夹`, and `Select Folder`.
@@ -111,27 +126,30 @@ Never offer an all-environment-variables operation. Only sync names the user exp
 Run these in order, using the absolute Agent path:
 
 ```text
-credential-agent status
-credential-agent doctor --strict
-credential-agent devices
+credential-agent status --output json
+credential-agent doctor --strict --output json
+credential-agent devices --output json
 ```
 
-Prefer `--output json` when the installed Agent accepts it; never parse localized human prose in scripts. Use exit status for legacy Agent compatibility. Then apply [troubleshooting.md](references/troubleshooting.md).
+Use these structured forms only after capability/feature detection confirms them; otherwise use the legacy commands and exit status. Never parse localized human prose in scripts. Then apply [troubleshooting.md](references/troubleshooting.md).
 
 Keep device enrollment, browser integration, and artifact updates as separate states. A browser failure must not erase valid device enrollment. An Agent update must not force pairing when authorization remains valid.
 
 ## Completion criteria
 
-For complete setup, require all of the following:
+Report readiness in two layers. `device_ready` requires:
 
 - Agent executes from the standard per-user path.
 - Device credential is valid.
 - Device key store and cache are usable.
 - Background Agent is running.
 - OAuth checks pass on a personal computer; device-only cloud endpoints may skip them.
+
+`browser_ready` additionally requires:
+
 - Native Messaging manifest is valid.
 - Chrome/Chromium extension is connected and its running version matches the Agent-managed version.
 - On a personal computer, all currently enabled Vault site policies are installed and their required origins are authorized. A device-only cloud endpoint may authorize a policy when its first restore task arrives.
 - `doctor --strict` exits successfully.
 
-If the user explicitly skips browser integration, report device setup as complete and browser setup as skipped. Never report a partial browser state as fully complete.
+If the user explicitly skips browser integration, report `device_ready=true` and `browser_ready=skipped`. A browser repair failure must not downgrade valid device enrollment. Never report a partial browser state as fully complete.
