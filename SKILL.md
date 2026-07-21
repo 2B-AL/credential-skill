@@ -16,7 +16,7 @@ Resolve the absolute directory containing this `SKILL.md` before invoking bundle
    - macOS/Linux: `sh <skill-directory>/scripts/inspect-host.sh`
    - Windows: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <absolute-skill-directory>\scripts\inspect-host.ps1`
 3. Locate the Agent from the returned JSON. Never assume it is on `PATH`.
-4. If the Agent supports it, run its absolute path with `capabilities --output json` once and retain the result for this task. Use `runtime.kind`, `enrollment`, `daemon.manager`, `daemon.healthy`, and `browser` as the orchestration contract. On an older Agent, feature-detect commands from `help`; do not infer runtime type from virtualization or parse localized output.
+4. If the Agent supports it, run its absolute path with `capabilities --output json` once and retain the result for this task. Use `runtime.kind`, `enrollment`, `daemon.manager`, `daemon.healthy`, `browser.features`, and `jobs.features` as the orchestration contract. On Linux, both Agent and host inspection may obtain this contract from the root-owned `/run/credential-agent/runtime.json`; do not require inherited shell environment. On an older Agent, feature-detect commands from `help`; do not infer runtime type from virtualization or parse localized output.
 5. Classify the request as setup, browser repair, sync, revoke/cleanup, status, or diagnosis.
 6. Read only the relevant reference:
    - Setup or browser work: [browser-installation.md](references/browser-installation.md)
@@ -91,7 +91,7 @@ Read `chrome.user_data_dirs` from the host inspection result. When it is non-emp
 credential-agent browser setup --user-data-dir /absolute/browser/user-data --timeout 10m
 ```
 
-Current Linux Agents also discover same-user running Chrome/Chromium processes and merge their effective `--user-data-dir` automatically. Keep passing the host-inspected directories for deterministic orchestration and compatibility with older Agents. Never copy a Native Messaging manifest into that directory yourself; let Agent validate the directory and install the binding.
+Current Linux Agents also discover same-user running Chrome/Chromium processes, resolve symlink aliases, and merge their effective `--user-data-dir` automatically. Keep passing the canonical host-inspected directories for deterministic orchestration and compatibility with older Agents. A root AIO runtime uses `/root/.config/browser`; `/home/root` is only a compatibility symlink and must not produce a second browser profile. Never copy a Native Messaging manifest into that directory yourself; let Agent validate the directory and install the binding.
 
 Run `browser wait` or the legacy `browser setup` in a yielded terminal session because it waits for extension connection and permissions. While it waits:
 
@@ -112,13 +112,13 @@ Stop automation immediately on an unexpected permission dialog, locked desktop, 
 
 Read [agent-command-map.md](references/agent-command-map.md) before selecting commands.
 
-For browser sync, fail fast on the personal/source computer before creating or initializing a new target:
+For browser sync, fail fast on the personal/source computer before creating or initializing a new target when `browser.features` contains `validate` (or older `help` explicitly lists `browser validate`):
 
 ```text
 credential-agent browser validate --output jsonl SITE...
 ```
 
-This uses `VALIDATE_SITE` only; it does not read, capture, or upload Cookie material. Continue target provisioning only when the final result is `succeeded` and every requested site is `authenticated`.
+This uses `VALIDATE_SITE` only; it does not read, capture, or upload Cookie material. Continue target provisioning only when the final result is `succeeded` and every requested site is `authenticated`. If an older Agent does not advertise or list `validate`, skip this standalone preflight and let the later capture phase validate; do not call an unknown command or parse its error text.
 
 1. Run `credential-agent devices`. If `devices --output json` is supported, prefer it.
 2. Match an explicitly named target exactly. Auto-select only when exactly one active peer/cloud target exists.
@@ -131,6 +131,17 @@ This uses `VALIDATE_SITE` only; it does not read, capture, or upload Cookie mate
 For Agent orchestration, once the exact target and site list have already been shown and approved, prefer `browser sync --to DEVICE --yes --output jsonl SITE...`. Consume JSONL phase events and the final result instead of answering localized prompts through a PTY. Fall back to interactive mode only when feature detection shows an older Agent.
 
 Treat JSONL as a stage protocol, not localized text: retain `operation_id`, read each phase `status` and `duration_ms`, and wait for the final `result`. For browser sync, inspect `details.policies.checked`, `already_current`, and `updated`; `updated=0` with every checked policy already current means Agent safely skipped policy writes and the 30-second policy heartbeat wait. This is not a skipped login capture or delivery.
+
+Keep the source sync process in a foreground/yielded session and consume JSONL incrementally. As soon as the `create_sync_job` phase succeeds, retain `details.job.id` and immediately inspect the target's own browser status and visible tabs through whatever execution/browser channel was provided for that target. Do this while the same source process continues waiting; do not wait for its fixed delivery window to expire first. If the target shows the exact policy-origin permission page, complete that visible user-gesture flow and let the original Job continue. This is upper-level orchestration and must not depend on a Sandbox Skill or assume the target is Linux.
+
+If the source command finishes with `pending_target`, continue the exact Job instead of resubmitting the browser capture:
+
+```text
+credential-agent job status JOB_ID --output json
+credential-agent job wait JOB_ID --timeout 5m --output jsonl
+```
+
+Use these commands only when `jobs.features` advertises them or `help` lists `job status|wait`. On older Agents, use the existing governance job/audit views only for diagnosis and keep the result pending; never create a duplicate Job merely to learn whether the first one finished.
 
 If delivery reports `BROWSER_VALIDATION_TIMED_OUT` or `BROWSER_VALIDATION_FAILED`, do not resubmit the restore. A compatible target Agent already performs one validate-only retry after the browser mutation completes. Wait for the authoritative final job result; retry only `VALIDATE_SITE` during diagnosis, never the Cookie restore.
 

@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -19,6 +20,9 @@ LINUX_CHROMIUM_EXECUTABLES = {
     "google-chrome",
     "google-chrome-stable",
 }
+
+DEFAULT_RUNTIME_DESCRIPTOR_PATH = Path("/run/credential-agent/runtime.json")
+MAX_RUNTIME_DESCRIPTOR_BYTES = 16 << 10
 
 
 def normalized_arch() -> str:
@@ -177,16 +181,77 @@ def agent_path(goos: str) -> Path:
     return candidates[0]
 
 
-def runtime_hints() -> dict[str, Optional[str]]:
+def read_runtime_descriptor(
+    descriptor_path: Path | None = None,
+    system: str | None = None,
+) -> dict[str, object]:
+    if (system or platform.system()).lower() != "linux":
+        return {}
+    overridden = descriptor_path is not None or bool(
+        os.environ.get("CREDENTIAL_AGENT_RUNTIME_DESCRIPTOR_PATH", "").strip()
+    )
+    if descriptor_path is None:
+        descriptor_path = Path(
+            os.environ.get(
+                "CREDENTIAL_AGENT_RUNTIME_DESCRIPTOR_PATH",
+                str(DEFAULT_RUNTIME_DESCRIPTOR_PATH),
+            )
+        )
+    if not descriptor_path.is_absolute():
+        return {}
+    try:
+        info = descriptor_path.lstat()
+        if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+            return {}
+        if stat.S_IMODE(info.st_mode) & 0o022:
+            return {}
+        if info.st_uid != 0 and not (overridden and info.st_uid == os.geteuid()):
+            return {}
+        if info.st_size > MAX_RUNTIME_DESCRIPTOR_BYTES:
+            return {}
+        payload = json.loads(descriptor_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        return {}
+    runtime_value = payload.get("runtime")
+    daemon_value = payload.get("daemon")
+    browser_value = payload.get("browser")
+    kind = runtime_value.get("kind", "") if isinstance(runtime_value, dict) else ""
+    manager = daemon_value.get("manager", "") if isinstance(daemon_value, dict) else ""
+    if not isinstance(kind, str) or not kind.replace("_", "").replace("-", "").isalnum():
+        return {}
+    if manager not in {"platform", "external", "none"}:
+        return {}
+    user_data_dirs: list[str] = []
+    if isinstance(browser_value, dict) and isinstance(browser_value.get("user_data_dirs"), list):
+        for raw in browser_value["user_data_dirs"]:
+            if not isinstance(raw, str):
+                continue
+            path = Path(raw).expanduser()
+            if path.is_absolute() and path.is_dir():
+                resolved = str(path.resolve())
+                if resolved not in user_data_dirs:
+                    user_data_dirs.append(resolved)
+    return {
+        "kind": kind,
+        "daemon_manager": manager,
+        "browser_user_data_dirs": user_data_dirs,
+    }
+
+
+def runtime_hints(descriptor: dict[str, object] | None = None) -> dict[str, Optional[str]]:
     kind = os.environ.get("CREDENTIAL_AGENT_RUNTIME_KIND", "").strip()
     if not kind.replace("_", "").replace("-", "").isalnum():
         kind = ""
     daemon_manager = os.environ.get("CREDENTIAL_AGENT_DAEMON_MANAGER", "").strip()
     if daemon_manager not in {"platform", "external", "none"}:
         daemon_manager = ""
+    if descriptor is None:
+        descriptor = read_runtime_descriptor()
     return {
-        "kind": kind or "desktop",
-        "daemon_manager_hint": daemon_manager or None,
+        "kind": kind or str(descriptor.get("kind") or "desktop"),
+        "daemon_manager_hint": daemon_manager or str(descriptor.get("daemon_manager") or "") or None,
     }
 
 
@@ -195,13 +260,18 @@ def main() -> None:
     goos = {"darwin": "darwin", "windows": "windows", "linux": "linux"}.get(goos, goos)
     agent = agent_path(goos)
     running_chrome, user_data_dirs = running_linux_chromium()
+    descriptor = read_runtime_descriptor(system=goos)
+    for path in descriptor.get("browser_user_data_dirs", []):
+        if isinstance(path, str) and path not in user_data_dirs:
+            user_data_dirs.append(path)
+    user_data_dirs.sort()
     chrome = chrome_path(goos) or running_chrome
     output = {
         "schema_version": 1,
         "os": goos,
         "arch": normalized_arch(),
         "interactive": bool(sys.stdin.isatty() and sys.stdout.isatty()),
-        "runtime": runtime_hints(),
+        "runtime": runtime_hints(descriptor),
         "chrome": {
             "installed": bool(chrome),
             "executable": chrome or None,

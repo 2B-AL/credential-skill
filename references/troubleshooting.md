@@ -73,8 +73,9 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 
 - Target receives before manual `pull`: normal; background Agent may have already consumed the assignment.
 - `pull` says nothing pending after source reports received: normal and not a version mismatch.
-- `pending_target`: verify target `doctor`, background Agent, network, and authorization.
+- `pending_target`: keep the returned Job ID, verify target `doctor`, background Agent, network, and authorization, then run `credential-agent job wait JOB_ID --timeout 5m --output jsonl` when advertised. Do not rerun the original sync.
 - A current target holds a bounded long poll for assignments; normal pickup should not require repeated manual `pull`. A persistent delay indicates daemon/network/authorization health, not a reason to increase Skill sleeps.
+- For browser jobs, begin target-side visible permission inspection immediately after the source JSONL `create_sync_job` phase rather than after the source wait window. Approve only the exact policy origins, and leave the original Job active.
 - Machine output must end with a `result` event. Do not report success from an intermediate `phase` event, even when Capture succeeded.
 - `BROWSER_VALIDATION_TIMED_OUT` or `BROWSER_VALIDATION_FAILED` after restore means the browser mutation completed but login validation could not be confirmed. A current Agent retries `VALIDATE_SITE` once without restoring Cookie or Local Storage again. Do not restart the whole sync automatically; use the final job status.
 - An older target reporting `browser_restore_failed(BROWSER_OPERATION_FAILED)` after a visibly authenticated first-party page may be conflating validation with restore. Update the target Agent and extension before retrying; do not infer success from the page alone.

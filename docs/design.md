@@ -438,7 +438,7 @@ Skill 不应解析以下文本：
 
 ### 11.1 输出格式
 
-当前 `pair` 和 `browser sync` 的稳定自动化接口统一使用：
+当前 `pair`、`browser sync` 和 `job wait` 的稳定自动化接口统一使用：
 
 ```text
 --output human
@@ -472,11 +472,13 @@ credential-agent pair --deny --output json CODE
 credential-agent browser sync --to DEVICE --yes --output json SITE...
 credential-agent browser sync --to DEVICE --yes --output jsonl SITE...
 credential-agent browser sync --to DEVICE --yes --output jsonl --all
+credential-agent job status JOB_ID --output json
+credential-agent job wait JOB_ID --timeout 5m --output jsonl
 ```
 
 机器输出模式必须显式提供决定、目标、网站范围和同步确认；缺少这些信息时立即失败，不得进入 ReadLine。配对码不得进入结构化输出。
 
-以下状态/浏览器分步接口仍属于后续扩展，Skill 使用前必须先做 feature detection：
+状态、浏览器分步和 Job 续等接口已经实现，但 Skill 仍必须通过 `capabilities.browser.features`、`capabilities.jobs.features` 或旧版 `help` 做 feature detection：
 
 ```bash
 credential-agent status --output json
@@ -487,8 +489,10 @@ credential-agent browser prepare --output json
 credential-agent browser status --output json
 credential-agent browser open-install
 credential-agent browser open-permissions
-credential-agent browser wait --phase connected --timeout 2m --output json
-credential-agent browser wait --phase authorized --timeout 2m --output json
+credential-agent browser wait --for connected --timeout 2m --output json
+credential-agent browser wait --for permissions --timeout 2m --output json
+credential-agent job status JOB_ID --output json
+credential-agent job wait JOB_ID --timeout 5m --output jsonl
 ```
 
 ### 11.3 浏览器状态示例
@@ -952,6 +956,8 @@ credential-agent devices --output json
 ## 18. 同步完成判断
 
 Agent 创建 Job 后，Skill 不以“请求已提交”作为最终成功。
+
+`browser sync --output jsonl` 发出 `create_sync_job` 成功事件后，上层编排立即保留 Job ID，并在不终止源端等待的前提下检查目标端浏览器权限。目标既可以是 Linux 沙箱，也可以是 Windows 云电脑；该并发编排不属于任何一种目标 Skill。源端固定等待窗口结束后若返回 `pending_target`，使用 `job wait` 续等同一个 Job，不重复 Capture、Binding 或 CreateSyncJob。
 
 最终状态：
 

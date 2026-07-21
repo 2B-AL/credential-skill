@@ -22,15 +22,60 @@ class RunningLinuxChromiumTest(unittest.TestCase):
         os.environ["CREDENTIAL_AGENT_RUNTIME_KIND"] = "aio_sandbox"
         os.environ["CREDENTIAL_AGENT_DAEMON_MANAGER"] = "external"
         self.assertEqual(
-            inspect_host.runtime_hints(),
+            inspect_host.runtime_hints({}),
             {"kind": "aio_sandbox", "daemon_manager_hint": "external"},
         )
         os.environ["CREDENTIAL_AGENT_RUNTIME_KIND"] = "bad/value"
         os.environ["CREDENTIAL_AGENT_DAEMON_MANAGER"] = "unknown"
         self.assertEqual(
-            inspect_host.runtime_hints(),
+            inspect_host.runtime_hints({}),
             {"kind": "desktop", "daemon_manager_hint": None},
         )
+
+    def test_runtime_hints_use_root_owned_descriptor_when_environment_is_missing(self) -> None:
+        previous_kind = os.environ.get("CREDENTIAL_AGENT_RUNTIME_KIND")
+        previous_manager = os.environ.get("CREDENTIAL_AGENT_DAEMON_MANAGER")
+        self.addCleanup(self._restore_env, "CREDENTIAL_AGENT_RUNTIME_KIND", previous_kind)
+        self.addCleanup(self._restore_env, "CREDENTIAL_AGENT_DAEMON_MANAGER", previous_manager)
+        os.environ.pop("CREDENTIAL_AGENT_RUNTIME_KIND", None)
+        os.environ.pop("CREDENTIAL_AGENT_DAEMON_MANAGER", None)
+        with tempfile.TemporaryDirectory() as temporary:
+            browser = Path(temporary, "browser")
+            browser.mkdir()
+            descriptor_path = Path(temporary, "runtime.json")
+            descriptor_path.write_text(
+                '{"schema_version":1,"runtime":{"kind":"aio_sandbox"},'
+                '"daemon":{"manager":"external"},"browser":{"user_data_dirs":["'
+                + str(browser)
+                + '"]}}',
+                encoding="utf-8",
+            )
+            descriptor = inspect_host.read_runtime_descriptor(
+                descriptor_path=descriptor_path,
+                system="linux",
+            )
+
+        self.assertEqual(descriptor["kind"], "aio_sandbox")
+        self.assertEqual(descriptor["daemon_manager"], "external")
+        self.assertEqual(descriptor["browser_user_data_dirs"], [str(browser.resolve())])
+        self.assertEqual(
+            inspect_host.runtime_hints(descriptor),
+            {"kind": "aio_sandbox", "daemon_manager_hint": "external"},
+        )
+
+    def test_runtime_descriptor_rejects_world_writable_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            descriptor_path = Path(temporary, "runtime.json")
+            descriptor_path.write_text(
+                '{"schema_version":1,"runtime":{"kind":"aio_sandbox"},'
+                '"daemon":{"manager":"external"}}',
+                encoding="utf-8",
+            )
+            descriptor_path.chmod(0o666)
+            self.assertEqual(
+                inspect_host.read_runtime_descriptor(descriptor_path, system="linux"),
+                {},
+            )
 
     @staticmethod
     def _restore_env(name: str, value: Optional[str]) -> None:

@@ -29,9 +29,13 @@ credential-agent pair --deny --output json PAIR-CODE
 credential-agent status
 credential-agent doctor --strict
 credential-agent pull
+credential-agent job status JOB_ID --output json
+credential-agent job wait JOB_ID --timeout 5m --output jsonl
 ```
 
 Run `capabilities --output json` before setup when supported. Its `daemon.manager` is authoritative for lifecycle orchestration:
+
+On Linux, a platform image may publish the same non-sensitive contract at `/run/credential-agent/runtime.json`. Current Agent and host inspection read this root-owned descriptor when their shell did not inherit PID 1 environment. Windows continues to use its native capability and service-manager path and does not require this file.
 
 - `platform`: launchd/systemd or the current platform's normal user-service manager.
 - `external`: an image or desktop supervisor owns the long-running process; append `--daemon-manager external` to setup and never install a second platform daemon.
@@ -157,6 +161,8 @@ Read-only source login preflight:
 credential-agent browser validate --output jsonl github
 ```
 
+Call it only when `capabilities.browser.features` contains `validate` or older `help` explicitly lists it. If absent, rely on the selected-site capture validation rather than issuing an unknown command.
+
 Run this before provisioning a new target. It sends `VALIDATE_SITE` through the connected extension and reports per-site status without capture, upload, binding creation, or target selection.
 
 After the user has explicitly approved the exact target and selected sites, Agent orchestration should prefer stable phase output:
@@ -166,6 +172,8 @@ credential-agent browser sync --to DEVICE --yes --output jsonl github
 ```
 
 Do not drive the interactive confirmation by guessing prompt state or sending `Y\n` through a PTY. Use JSONL until the final `result` event, and retain the `operation_id` and Sync Job ID for diagnostics. Fall back to the interactive form only when the installed Agent does not support these flags.
+
+After the `create_sync_job` JSONL phase, keep the source process running and immediately handle any exact-origin permission UI on the target through its own browser channel. The target may be a Linux sandbox or a Windows cloud desktop; this orchestration does not import or call another Skill. If the source result is `pending_target`, resume the same ID with `job wait`; do not rerun `browser sync`.
 
 The `prepare_browser` phase returns policy counters under `details.policies`:
 

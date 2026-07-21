@@ -19,7 +19,7 @@ On Linux, the Agent supports both native-host locations:
 - Chrome: `~/.config/google-chrome/NativeMessagingHosts`
 - Chromium: `~/.config/chromium/NativeMessagingHosts`
 
-Those are only the default user-data locations. Chrome/Chromium resolves the user-level Native Messaging directory from its effective user-data directory. Current Linux Agents automatically discover same-user running main-browser processes and merge their effective `--user-data-dir`; the Skill should still pass every host-inspected absolute directory with repeatable `--user-data-dir` flags for deterministic orchestration and older-Agent compatibility. Agent must validate and install the additional binding; the Skill must not copy or link manifests into browser data directories.
+Those are only the default user-data locations. Chrome/Chromium resolves the user-level Native Messaging directory from its effective user-data directory. Current Linux Agents automatically discover same-user running main-browser processes, resolve symlink aliases, and merge their effective `--user-data-dir`; the Skill should still pass every canonical host-inspected absolute directory with repeatable `--user-data-dir` flags for deterministic orchestration and older-Agent compatibility. Root AIO publishes `/root/.config/browser` in `/run/credential-agent/runtime.json`; `/home/root` is a compatibility alias, not a second profile. Agent must validate and install the additional binding; the Skill must not copy or link manifests into browser data directories.
 
 Only one browser needs to be installed. A missing manifest for an unused default browser is healthy; an existing malformed or mismatched manifest is not.
 
