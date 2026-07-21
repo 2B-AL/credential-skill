@@ -173,7 +173,7 @@ Codex 使用本 Skill 时会执行以下流程：
 
 ## Chrome/Chromium 扩展安装说明
 
-在未加入 Chrome Enterprise 管理、未通过 Chrome Web Store 发布扩展、也未修改 Chromium 的情况下，官方 Chrome/Chromium 不允许普通应用完全静默安装私有扩展。Linux Agent 支持 Chrome 的 `~/.config/google-chrome/NativeMessagingHosts` 和 Chromium 的 `~/.config/chromium/NativeMessagingHosts` 默认位置；如果受管浏览器通过 `--user-data-dir` 使用自定义目录，Skill 会从主机检查结果中取得该目录并调用 `credential-agent browser setup --user-data-dir <绝对路径>`，由 Agent 安装对应 Native Messaging 配置。Skill 不直接复制或链接 manifest。
+在未加入 Chrome Enterprise 管理、未通过 Chrome Web Store 发布扩展、也未修改 Chromium 的情况下，官方 Chrome/Chromium 不允许普通应用完全静默安装私有扩展。Linux Agent 支持 Chrome 的 `~/.config/google-chrome/NativeMessagingHosts` 和 Chromium 的 `~/.config/chromium/NativeMessagingHosts` 默认位置；如果受管浏览器通过 `--user-data-dir` 使用自定义目录，当前 Agent 会从同用户运行中的主浏览器自动发现该目录，Skill 也会把主机检查结果显式传给 Agent 以兼容旧版本和保持编排确定性。目录校验和 Native Messaging 配置安装均由 Agent 完成，Skill 不直接复制或链接 manifest。
 
 因此当前流程是：
 

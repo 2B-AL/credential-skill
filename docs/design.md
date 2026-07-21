@@ -42,7 +42,7 @@ AL 凭据中心已经具备以下核心能力：
 
 Skill 定位为 `credential-agent` 的安装和编排层，不重新实现凭据协议、加密、认证或浏览器扩展逻辑。
 
-主机检查只从当前用户可见的浏览器启动参数中提取 `--user-data-dir` 绝对路径，不读取浏览器 Profile 内容。Skill 将该路径传给 Agent；目录校验和 Native Messaging manifest 写入仍由 Agent 负责。
+主机检查只从当前用户可见的浏览器启动参数中提取 `--user-data-dir` 绝对路径，不读取浏览器 Profile 内容。Skill 将该路径传给 Agent；当前 Linux Agent 也会独立发现同用户运行中的主浏览器目录。目录校验和 Native Messaging manifest 写入仍只由 Agent 负责。
 
 最终职责关系：
 

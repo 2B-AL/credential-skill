@@ -91,7 +91,7 @@ Read `chrome.user_data_dirs` from the host inspection result. When it is non-emp
 credential-agent browser setup --user-data-dir /absolute/browser/user-data --timeout 10m
 ```
 
-This is required for managed Chrome/Chromium processes started with `--user-data-dir`. Never copy a Native Messaging manifest into that directory yourself; let Agent validate the directory and install the binding.
+Current Linux Agents also discover same-user running Chrome/Chromium processes and merge their effective `--user-data-dir` automatically. Keep passing the host-inspected directories for deterministic orchestration and compatibility with older Agents. Never copy a Native Messaging manifest into that directory yourself; let Agent validate the directory and install the binding.
 
 Run `browser wait` or the legacy `browser setup` in a yielded terminal session because it waits for extension connection and permissions. While it waits:
 

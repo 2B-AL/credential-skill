@@ -90,6 +90,28 @@ class RunningLinuxChromiumTest(unittest.TestCase):
             self.assertEqual(executable, "/opt/browser/chrome")
             self.assertEqual(user_data_dirs, [])
 
+    def test_finds_custom_user_data_dir_in_chromium_rewritten_cmdline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            proc = root / "proc"
+            process = proc / "104"
+            process.mkdir(parents=True)
+            user_data_dir = root / "browser"
+            user_data_dir.mkdir()
+            (process / "cmdline").write_bytes(
+                f"/opt/browser/chrome --user-data-dir={user_data_dir} --remote-debugging-port=9222".encode()
+            )
+
+            executable, user_data_dirs = inspect_host.running_linux_chromium(
+                proc=proc,
+                current_uid=os.geteuid(),
+                system="linux",
+                ps_output="",
+            )
+
+            self.assertEqual(executable, "/opt/browser/chrome")
+            self.assertEqual(user_data_dirs, [str(user_data_dir.resolve())])
+
     def test_uses_ps_fallback_when_proc_is_restricted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

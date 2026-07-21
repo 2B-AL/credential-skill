@@ -132,6 +132,11 @@ def running_linux_chromium(
         except OSError:
             continue
         arguments = [part.decode("utf-8", "surrogateescape") for part in raw.split(b"\0") if part]
+        # Some Chromium builds replace argv with one human-readable process
+        # title. Recover the usual whitespace-free flag value just as the
+        # Agent does; ambiguous paths can still be supplied explicitly.
+        if len(arguments) == 1:
+            arguments = arguments[0].split()
         if not arguments:
             continue
         try:

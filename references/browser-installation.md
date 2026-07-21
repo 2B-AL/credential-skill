@@ -19,7 +19,7 @@ On Linux, the Agent supports both native-host locations:
 - Chrome: `~/.config/google-chrome/NativeMessagingHosts`
 - Chromium: `~/.config/chromium/NativeMessagingHosts`
 
-Those are only the default user-data locations. Chrome/Chromium resolves the user-level Native Messaging directory from its effective user-data directory. If host inspection reports a process started with `--user-data-dir`, pass every reported absolute directory to Agent with repeatable `--user-data-dir` flags. Agent must validate and install the additional binding; the Skill must not copy or link manifests into browser data directories.
+Those are only the default user-data locations. Chrome/Chromium resolves the user-level Native Messaging directory from its effective user-data directory. Current Linux Agents automatically discover same-user running main-browser processes and merge their effective `--user-data-dir`; the Skill should still pass every host-inspected absolute directory with repeatable `--user-data-dir` flags for deterministic orchestration and older-Agent compatibility. Agent must validate and install the additional binding; the Skill must not copy or link manifests into browser data directories.
 
 Only one browser needs to be installed. A missing manifest for an unused default browser is healthy; an existing malformed or mismatched manifest is not.
 
@@ -51,7 +51,7 @@ Both forms install Native Messaging, download and verify the signed extension ar
 
 ## State machine
 
-1. Run `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
+1. Run `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. Current Linux Agents also discover the same-user running browser directory themselves. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
 2. Run `browser status --output json`. If `connected=true` and `running_version == prepared_version`, skip installation UI. Otherwise run `open-install`, operate the visible browser, and yield on `wait --for connected`.
 3. If an old extension is online, reload its card. If the running version remains old, remove only the AL Credential Center extension and load the Agent-managed directory again.
 4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first restore task will deliver the exact policy.
