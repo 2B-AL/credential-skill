@@ -12,7 +12,7 @@
 
 ## Capability boundary
 
-Official unmanaged Chrome on Windows/macOS and Chromium on Linux cannot silently install a private unpacked extension. This Skill may prepare the signed extension and assist visible UI, but it must not modify browser profiles or bypass user-gesture requirements.
+Official unmanaged Chrome on Windows/macOS and Chromium on Linux cannot silently install a private unpacked extension. Unmanaged Windows can automatically install only a Chrome Web Store item; off-store force installation is reserved for domain/enterprise-managed Windows. This Skill may prepare signed artifacts and assist visible UI, but it must not modify browser profiles or bypass user-gesture requirements.
 
 On Linux, the Agent supports both native-host locations:
 
@@ -35,6 +35,16 @@ credential-agent browser open-permissions --output json
 credential-agent browser wait --for permissions --timeout 10m --output json
 ```
 
+The status contract also exposes `distribution_mode`, `expected_extension_id`, `expected_build_id`, and `expected_manifest_version`. Treat their combination as the browser identity:
+
+| Mode | Intended environment | Install action |
+|---|---|---|
+| `unpacked` | personal macOS/Linux and Linux sandboxes | visible one-time Load unpacked |
+| `managed_store` | unmanaged Windows CUA | Chrome Web Store policy; no developer-mode UI |
+| `managed_self_hosted` | AD/Azure AD/Chrome Enterprise Windows | verified CRX through Agent loopback policy; no developer-mode UI |
+
+`managed_store` requires a published Store item. A missing item ID/build/manifest version is a release-configuration blocker, not a reason to fall back to UI loops or self-hosted CRX.
+
 The compatible fallback for older Agents is:
 
 ```text
@@ -51,9 +61,9 @@ Both forms install Native Messaging, download and verify the signed extension ar
 
 ## State machine
 
-1. Run `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. Current Linux Agents also discover the same-user running browser directory themselves. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
-2. Run `browser status --output json`. If `connected=true` and `running_version == prepared_version`, skip installation UI. Otherwise run `open-install`, operate the visible browser, and yield on `wait --for connected`.
-3. If an old extension is online, reload its card. If the running version remains old, remove only the AL Credential Center extension and load the Agent-managed directory again.
+1. Run the distribution-appropriate `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. For `managed_store`, the platform must add exact Store ID/build/manifest flags. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
+2. Run `browser status --output json`. Require connected runtime ID/build/manifest to match expected values.
+3. In unpacked mode only, run `open-install` when disconnected or stale and repair the exact Agent-managed directory. In managed modes, installation or update failure is a policy/release error; do not open developer mode.
 4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first restore task will deliver the exact policy.
 5. Inspect `browser status` again. If every reported supported site is authorized, skip permission UI. Otherwise run `open-permissions`, approve exact origins, and yield on `wait --for permissions`.
 6. Continue to `doctor --strict --output json` and require Agent-observed state; do not infer success from an extension card or dialog alone.
@@ -78,7 +88,7 @@ Semantic labels:
 - `重新加载` / `Reload`
 - `启用全部支持的网站` / `Enable all supported sites`
 
-Procedure:
+Unpacked installation procedure only:
 
 1. Confirm the page is `chrome://extensions/`.
 2. Enable developer mode if necessary.
@@ -86,6 +96,8 @@ Procedure:
 4. Select the exact `chrome-extension` directory already opened by Agent.
 5. Confirm the installed extension ID is `lnpfljjigmgmakiclchpnoehbbceomeb`.
 6. Let Agent determine whether the heartbeat version matches.
+
+Managed installation has no extension-management procedure. Once Chrome Policy installs the extension, the only visible browser action that may remain is exact Origin permission authorization. A my-cua Connector may use its authenticated CDP broker to open only `chrome-extension://<expected-id>/options.html`; do not use raw CDP, arbitrary page eval, or Cookie methods.
 
 Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify the browser. On Linux, use the browser opened by Agent; it detects `google-chrome`, `google-chrome-stable`, `chromium`, and `chrome`. Do not rely on Unix executable bits surviving GitHub ZIP installation.
 
@@ -106,7 +118,7 @@ Do not ask the user to type `Y` or confirm completion in the terminal. Leave Age
 
 ## Permission authorization
 
-After connection, Agent fetches the currently enabled Vault policies and opens the extension options page. Use visible UI to click `启用全部支持的网站` and accept the expected browser host-permission prompt. Stop if the prompt requests permissions outside the exact origins displayed for those policies.
+After connection, Agent fetches the currently enabled Vault policies and opens the extension options page. Chrome requires `optional_host_permissions` requests to originate from a user gesture, including for a preinstalled extension. Use visible UI to activate the exact site permission control and accept the expected host-permission prompt. Stop if the prompt requests permissions outside the exact origins displayed for those policies.
 
 The policy authority is Credential Vault. Extension heartbeat only reports the policy digests it cached and the origins the browser granted. Do not assume a fixed count or silently omit newly configured sites. On a device-only cloud endpoint, the first restore task may install one policy and trigger its exact permission prompt; leave Agent running so it can retry after approval.
 

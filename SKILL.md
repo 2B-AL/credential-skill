@@ -75,6 +75,14 @@ credential-agent browser open-permissions --output json   # only when required
 credential-agent browser wait --for permissions --timeout 10m --output json
 ```
 
+Choose the preparation branch from `capabilities.browser.distribution_mode` or the target Connector contract; never infer it from the OS alone:
+
+- `unpacked`: personal computers and Linux sandboxes. Use the sequence above, including `open-install` only when status requires it.
+- `managed_store`: unmanaged Windows CUA. The platform Connector must supply the exact Chrome Web Store `extension_id`, expected build id, and numeric manifest version to `browser prepare`. Do not substitute the unpacked/self-hosted extension ID, do not download a CRX, and do not open `chrome://extensions`.
+- `managed_self_hosted`: only an AD/Azure AD/Chrome Enterprise managed Windows target. Agent verifies CRX/update metadata and serves the policy update from its loopback provider. Do not select this merely because the target is Windows.
+
+When a target has a Credential Agent Connector, let that Connector own `prepare`, Browser Owner launch, and version readiness. Use the target control channel only for the exact permission handoff it reports. This keeps the Skill generic for Linux sandboxes and other endpoints.
+
 `prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides which UI action is actually needed. Do not reopen installation or permissions pages when the corresponding state is already ready.
 
 `open-install` and `open-permissions` report only that Chrome accepted an open request. Confirm the visible internal URL through the browser-control channel already provided for the target, and navigate explicitly when Chrome ignores the launch request.
@@ -96,11 +104,12 @@ Current Linux Agents also discover same-user running Chrome/Chromium processes, 
 Run `browser wait` or the legacy `browser setup` in a yielded terminal session because it waits for extension connection and permissions. While it waits:
 
 1. Prefer visible UI automation through browser/computer control when available.
-2. Use semantic labels such as `开发者模式`, `Developer mode`, `加载未打包的扩展程序`, `Load unpacked`, `选择文件夹`, and `Select Folder`.
-3. Select only the Agent-managed `chrome-extension` directory already opened by the Agent.
-4. If UI automation is unavailable, leave the detected browser and the directory open and ask for the single minimum action described in the browser reference.
-5. Do not ask the user to return to the terminal or type that installation is complete. Let Agent heartbeat detection continue.
-6. On the extension options page, activate `启用全部支持的网站` or its English label, then let the Agent validate permissions.
+2. In `unpacked` mode only, use semantic labels such as `开发者模式`, `Developer mode`, `加载未打包的扩展程序`, `Load unpacked`, `选择文件夹`, and `Select Folder`.
+3. In `unpacked` mode only, select the Agent-managed `chrome-extension` directory already opened by the Agent.
+4. In either managed mode, never enter developer mode or select a directory. If the managed extension is absent, stop on the Connector/Agent policy or release error.
+5. If UI automation is unavailable, leave the detected browser and the required page open and ask for the single minimum action described in the browser reference.
+6. Do not ask the user to return to the terminal or type that installation is complete. Let Agent heartbeat detection continue.
+7. On the extension options page, activate only the exact requested site permission control (or the bounded “enable supported sites” capability control), verify the displayed origins match Agent-delivered policy, then let the Agent validate permissions.
 
 Site support is controlled by Credential Vault dynamic policy, not by an extension build-time registry. Trust only policies that the Agent fetched and verified. The extension heartbeat reports cached policy digests and granted origins; do not treat it as the policy authority or hardcode site names/counts. On a device-only cloud endpoint, a site's policy may first arrive with its restore task. If Agent opens the permission page, approve only the exact origins displayed for that policy and let Agent retry.
 

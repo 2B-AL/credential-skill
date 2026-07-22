@@ -59,10 +59,13 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 
 ## Browser integration
 
-- Chrome opens but not `chrome://extensions/`: rerun Agent browser setup, then use the safe browser-assist script and visible UI.
-- For staged setup, inspect `browser status --output json` before reopening anything. Run `open-install` only for disconnected/version-mismatched state, and run `open-permissions` only after `configure-policies` when authorization is incomplete.
-- Extension directory exists but Agent waits: verify the fixed ID, reload the extension, and wait for heartbeat. Directory presence is insufficient.
-- Running/prepared versions differ: reload; if still mismatched, remove only the AL extension and load the managed directory again.
+- Inspect `browser status --output json` and its `distribution_mode` before reopening anything. Do not infer the repair path from Windows/Linux alone.
+- In `unpacked` mode, Chrome opens but not `chrome://extensions/`: rerun the Agent open-install step, then use the safe browser-assist script and visible UI.
+- In either managed mode, never open developer mode or load a directory. An absent or stale extension is a Chrome Policy, Store publication, release identity, or signed-artifact error.
+- `managed_store` reports missing identity: configure the exact published Store item ID, build ID, and numeric manifest version in the platform Connector; do not fall back to the self-hosted ID.
+- `managed_self_hosted` reports provider unavailable: verify the enterprise-management prerequisite, signed CRX/update manifest state, Agent loopback provider, and Chrome policy.
+- In unpacked mode, extension directory exists but Agent waits: verify the expected ID, reload the extension, and wait for heartbeat. Directory presence is insufficient.
+- Running/expected ID, build, or manifest differs: repair through the selected distribution channel. Only unpacked mode may remove and reload the Agent-managed directory.
 - Options page says enabled but Agent reports incomplete: click enable-all again, accept the Chrome permission prompt, and wait for a new heartbeat.
 - Locked/disconnected cloud desktop: pause UI automation until an active visible session exists.
 - Site reports unauthenticated: ensure the source browser is actually logged in and the extension version/permissions are current. Do not expand cookie allowlists from the Skill.

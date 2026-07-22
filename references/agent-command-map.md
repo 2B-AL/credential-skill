@@ -139,7 +139,24 @@ credential-agent browser open-permissions --output json
 credential-agent browser wait --for permissions --timeout 10m --output json
 ```
 
-Call `open-*` only when `browser status` proves the corresponding action is needed. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; that endpoint receives the exact policy with its first restore task. Use legacy `browser setup` as the feature-detected fallback.
+Select the preparation contract from Agent capabilities or the target Connector:
+
+```text
+# Personal computers and Linux sandboxes
+credential-agent browser prepare --distribution-mode unpacked --output json
+
+# Unmanaged Windows CUA; values must come from the platform release configuration
+credential-agent browser prepare --distribution-mode managed_store \
+  --extension-id STORE_ITEM_ID \
+  --expected-build-id RELEASE_BUILD_ID \
+  --expected-manifest-version NUMERIC_VERSION \
+  --output json
+
+# Enterprise-managed Windows only
+credential-agent browser prepare --distribution-mode managed_self_hosted --output json
+```
+
+Never invent or substitute Store identity fields. When a target Connector owns preparation, observe its readiness state instead of issuing a second prepare. Call `open-install` only in unpacked mode and only when `browser status` proves it is needed. `open-permissions` remains a visible exact-Origin handoff in every mode. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; that endpoint receives the exact policy with its first restore task. Use legacy `browser setup` as the feature-detected fallback only on older Agents.
 
 All currently authenticated supported sites:
 

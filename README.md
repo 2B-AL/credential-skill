@@ -12,8 +12,8 @@
 - 初始化个人电脑并完成 OAuth Device Flow 登录。
 - 初始化云电脑或对端电脑，并通过短期配对码入网。
 - 安装、更新和诊断 Agent 后台服务。
-- 准备 Chrome/Chromium Native Messaging 和 AL Credential Center 扩展。
-- 在可见桌面中协助完成 Chrome/Chromium 未打包扩展安装。
+- 准备 Chrome/Chromium Native Messaging，并按运行环境选择未打包、Chrome Web Store 或企业自托管扩展。
+- 仅在 `unpacked` 模式中协助完成可见的未打包扩展安装；受管模式不进入开发者模式。
 - 从 Credential Vault 获取动态站点策略，并启用当前策略要求的网站权限。
 - 同步自定义 Secret、指定环境变量、AK/SK 等凭据组合、配置文件和网站会话。
 - 检查设备、后台 Agent、浏览器扩展、权限和同步投递状态。
@@ -136,7 +136,7 @@ Codex 使用本 Skill 时会执行以下流程：
 
 6. Agent 打开 OAuth Device Flow 页面，用户在页面中完成登录确认。
 7. Agent 创建设备密钥、保存设备授权并启动后台同步。
-8. 运行浏览器安装流程：
+8. 运行能力探测并选择浏览器分发流程；当前 Agent 优先使用分阶段命令，旧 Agent 才回退到：
 
    ```text
    credential-agent browser setup --timeout 10m
@@ -173,9 +173,17 @@ Codex 使用本 Skill 时会执行以下流程：
 
 ## Chrome/Chromium 扩展安装说明
 
-在未加入 Chrome Enterprise 管理、未通过 Chrome Web Store 发布扩展、也未修改 Chromium 的情况下，官方 Chrome/Chromium 不允许普通应用完全静默安装私有扩展。Linux Agent 支持 Chrome 的 `~/.config/google-chrome/NativeMessagingHosts` 和 Chromium 的 `~/.config/chromium/NativeMessagingHosts` 默认位置；如果受管浏览器通过 `--user-data-dir` 使用自定义目录，当前 Agent 会从同用户运行中的主浏览器自动发现该目录，Skill 也会把主机检查结果显式传给 Agent 以兼容旧版本和保持编排确定性。目录校验和 Native Messaging 配置安装均由 Agent 完成，Skill 不直接复制或链接 manifest。
+浏览器扩展分发不是固定流程，Skill 必须从 Agent capabilities 或目标 Connector 选择模式：
 
-因此当前流程是：
+| 模式 | 适用环境 | 安装方式 |
+| --- | --- | --- |
+| `unpacked` | 个人 macOS/Linux、Linux sandbox | 一次可见的 Load unpacked |
+| `managed_store` | 未受企业管理的 Windows CUA | Chrome Web Store 策略预装 |
+| `managed_self_hosted` | AD/Entra ID/Chrome Enterprise 管理的 Windows | Agent 校验 CRX 后通过 loopback update provider 安装 |
+
+`managed_store` 必须使用已发布 Store item 的精确扩展 ID、build ID 和数字 manifest version；缺少任一字段都是发布配置阻塞，不能退回开发者模式或冒用自托管扩展 ID。Linux Agent 继续支持 Chrome 的 `~/.config/google-chrome/NativeMessagingHosts` 和 Chromium 的 `~/.config/chromium/NativeMessagingHosts` 默认位置，并能发现同用户运行浏览器的显式 `--user-data-dir`。目录校验和 Native Messaging 配置安装均由 Agent 完成，Skill 不直接复制或链接 manifest。
+
+`unpacked` 模式流程是：
 
 1. Agent 自动下载并验证扩展制品。
 2. Agent 自动解压到固定管理目录。
@@ -189,13 +197,15 @@ Codex 使用本 Skill 时会执行以下流程：
 7. Agent 根据扩展心跳确认实际运行版本，而不是仅根据目录存在判断成功。
 8. 在扩展授权页面点击“启用全部支持的网站”。扩展只申请 Vault 当前策略中的精确 HTTPS Origin；以后新增站点时可能需要再确认一次新 Origin。
 
-固定扩展 ID：
+`unpacked` 与 `managed_self_hosted` 的固定扩展 ID：
 
 ```text
 lnpfljjigmgmakiclchpnoehbbceomeb
 ```
 
 Skill 不会修改 Chrome Profile、Cookie 数据库、Secure Preferences，也不会伪造 Chrome 企业管理状态。
+
+受管模式没有扩展管理 UI 操作。Chrome Policy 完成预装后，CUA Connector 只可通过认证 CDP 通道打开精确的 `chrome-extension://<expected-id>/options.html`；不得暴露 raw CDP、任意页面 eval 或 Cookie 方法。由于 Chrome 的 optional host permission 仍要求用户手势，用户可能需要在扩展页对 Agent 签发策略中的精确 Origin 做一次可见确认。
 
 ## 支持的凭据类型
 
@@ -373,7 +383,7 @@ Windows PowerShell 必须使用调用运算符：
 - 后台 Agent 正在运行。
 - 个人电脑 OAuth 检查通过。
 - 云电脑设备授权控制面可用。
-- Native Messaging Manifest 正确绑定固定扩展 ID。
+- Native Messaging Manifest 正确绑定当前分发模式的预期扩展 ID。
 - Chrome 扩展在线。
 - 扩展运行版本与 Agent 管理目录中的目标版本一致。
 - 个人电脑上 Vault 当前启用的网站策略已下发且所需 Origin 已授权；仅设备授权的云电脑允许在首次接收任务时按站点完成授权。
@@ -405,11 +415,11 @@ Windows PowerShell 必须使用调用运算符：
 
 ### 为什么 Chrome 扩展目录已经存在，Agent 仍然在等待？
 
-目录存在不代表 Chrome 已经加载扩展。Agent 会等待固定扩展 ID 的 Native Messaging 心跳，并检查运行版本、权限和准备版本是否一致。
+这只适用于 `unpacked` 模式。目录存在不代表 Chrome 已经加载扩展；Agent 会等待预期扩展 ID 的 Native Messaging 心跳，并检查运行 build、manifest version、权限和准备状态是否一致。受管模式不以目录作为安装状态。
 
 ### 为什么扩展更新后仍然运行旧版本？
 
-先在 `chrome://extensions/` 对 AL Credential Center 点击重新加载。如果心跳版本仍然不一致，只移除这个扩展，然后重新加载 Agent 管理的同一个 `chrome-extension` 目录。
+先检查 `browser status --output json` 的 `distribution_mode`。`unpacked` 模式可以在 `chrome://extensions/` 重新加载，必要时只移除 AL 扩展并重新加载 Agent 管理目录；`managed_store` 和 `managed_self_hosted` 必须修复对应 Store/策略/签名制品链路，不能进入开发者模式。
 
 ### 为什么网站会话同步后仍要求重新认证？
 
