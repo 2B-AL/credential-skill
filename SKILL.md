@@ -51,8 +51,8 @@ Do not re-enroll a device whose authorization is valid. Repeated setup should re
 
 ## Initialize a cloud or peer computer
 
-1. If capabilities report the root AIO contract `runtime.kind=aio_sandbox` and `daemon.manager=external`, use foreground `setup --role cloud --skip-browser --daemon-manager external --pair-phase begin --output json`, approve its short-lived pairing code, then run `setup --role cloud --skip-browser --daemon-manager external --pair-phase complete --pair-timeout 2m --output json`. Never put either call in a generic background task; the Agent private state does not persist the pairing code.
-2. On Windows or an older Agent without phased setup, run `credential-agent setup --role cloud --skip-browser` interactively and use its reported daemon manager. Do not apply AIO external-supervisor assumptions to Windows cloud computers.
+1. When capabilities/help advertises phased cloud setup, use foreground `setup --role cloud --skip-browser [--daemon-manager MANAGER] --pair-phase begin --output json`, approve its short-lived pairing code, then run the matching `--pair-phase complete --pair-timeout 2m --output json`. Use the capability-reported daemon manager on every OS; append `external` only when reported. Never put either call in a generic background task.
+2. On an older Agent without phased setup, run `credential-agent setup --role cloud --skip-browser` interactively and use its reported daemon manager.
 3. If a separate, already logged-in personal-computer execution channel is available, show the pending device to the user. After explicit approval, prefer its absolute Agent path with `credential-agent pair --approve --output json CODE`; use interactive `credential-agent pair CODE` only for an older Agent without these flags.
 4. Otherwise show exactly one local approval command. Do not copy device credentials or OAuth tokens between computers.
 5. Wait for the cloud setup process to finish, then complete browser setup and run `doctor --strict`.
@@ -151,6 +151,18 @@ For Agent orchestration, once the exact target and site list have already been s
 Treat JSONL as a stage protocol, not localized text: retain `operation_id`, read each phase `status` and `duration_ms`, and wait for the final `result`. For browser sync, inspect `details.policies.checked`, `already_current`, and `updated`; `updated=0` with every checked policy already current means Agent safely skipped policy writes and the 30-second policy heartbeat wait. This is not a skipped login capture or delivery.
 
 Keep the source sync process in a foreground/yielded session and consume JSONL incrementally. As soon as the `create_sync_job` phase succeeds, retain `details.job.id` and immediately inspect the target's own browser status and visible tabs through whatever execution/browser channel was provided for that target. Do this while the same source process continues waiting; do not wait for its fixed delivery window to expire first. If the target shows the exact policy-origin permission page, complete that visible user-gesture flow and let the original Job continue. This is upper-level orchestration and must not depend on a Sandbox Skill or assume the target is Linux.
+
+For a configured my-cua target, replace repeated cached status reads with its
+request-scoped exact-site adapter while the same source process remains active:
+
+```text
+python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser authorize SITE...
+```
+
+This my-cua-specific command is only an adapter around Connector probes and the
+exact Chrome permission gesture. It does not change this Skill's generic Agent
+workflow, does not capture Cookie material, and must not be used for Linux
+sandboxes or non-CUA endpoints.
 
 If the source command finishes with `pending_target`, continue the exact Job instead of resubmitting the browser capture:
 

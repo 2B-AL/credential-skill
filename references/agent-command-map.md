@@ -43,7 +43,7 @@ On Linux, a platform image may publish the same non-sensitive contract at `/run/
 
 Do not derive this choice from OS alone. In particular, Windows cloud computers continue to use their reported platform manager; AIO sandbox images report `runtime.kind=aio_sandbox` and `daemon.manager=external`.
 
-For AIO orchestration, use phased setup so the pairing code is returned by a fast foreground command and never retained by a generic background task. Use the regular interactive setup path on Windows or older Agents.
+Use phased setup whenever capabilities/help advertises it so the pairing code is returned by a fast foreground command and never retained by a generic background task. This applies to current Windows cloud Agents as well as AIO; use the regular interactive setup path only on older Agents.
 
 Use interactive `pair PAIR-CODE` when the Agent itself must collect the decision. After the exact pending device has already been shown and the user decided, use `--approve` or `--deny`; do not answer ReadLine prompts through a PTY. Structured pair output never includes the pairing code. Prefer `status --output json`, `devices --output json`, and `doctor --strict --output json` only after feature detection confirms the installed Agent accepts them. Legacy releases expose human output; use their exit status rather than parsing translated strings.
 
@@ -194,6 +194,8 @@ credential-agent browser sync --to DEVICE --yes --output jsonl github
 Do not drive the interactive confirmation by guessing prompt state or sending `Y\n` through a PTY. Use JSONL until the final `result` event, and retain the `operation_id` and Sync Job ID for diagnostics. Fall back to the interactive form only when the installed Agent does not support these flags.
 
 After the `create_sync_job` JSONL phase, keep the source process running and immediately handle any exact-origin permission UI on the target through its own browser channel. The target may be a Linux sandbox or a Windows cloud desktop; this orchestration does not import or call another Skill. If the source result is `pending_target`, resume the same ID with `job wait`; do not rerun `browser sync`.
+
+Current Vault and Agent versions expose this pause as the nonterminal Job/Item status `waiting_permission` with reason `browser_host_permission`. After the target heartbeat confirms the exact policy digest and Origin grant, the same Job emits `restoring_sessions` again and continues. Preserve these states in JSONL; `pending_target` is only the caller's wait timeout result and must not overwrite the stored Job status.
 
 The `prepare_browser` phase returns policy counters under `details.policies`:
 
