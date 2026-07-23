@@ -28,6 +28,7 @@ credential-agent pair --approve --output json PAIR-CODE
 credential-agent pair --deny --output json PAIR-CODE
 credential-agent status
 credential-agent doctor --strict
+credential-agent device unenroll --yes --reason "reset for end-to-end test" --output json
 credential-agent pull
 credential-agent job status JOB_ID --output json
 credential-agent job wait JOB_ID --timeout 5m --output jsonl
@@ -42,6 +43,8 @@ On Linux, a platform image may publish the same non-sensitive contract at `/run/
 - `none`: the caller intentionally owns foreground lifecycle.
 
 Do not derive this choice from OS alone. In particular, Windows cloud computers continue to use their reported platform manager; AIO sandbox images report `runtime.kind=aio_sandbox` and `daemon.manager=external`.
+
+`device unenroll` is a current-personal-device operation, advertised as `capabilities.enrollment.features=unenroll-self`. It centrally revokes the current Device before stopping the platform daemon and clearing local User Auth, device identity/keys, and Secret Cache. Treat `central_revoked=true, local_state_cleared=false` as a partial result that requires local repair before setup. It deliberately preserves browser profile data, browser integration artifacts, restored files, central resources/snapshots, and the Agent binary. Never use it on a device-only cloud endpoint or an externally supervised Agent; revoke the exact cloud Device ID from a personal computer and reset that environment through its Connector instead.
 
 Use phased setup whenever capabilities/help advertises it so the pairing code is returned by a fast foreground command and never retained by a generic background task. This applies to current Windows cloud Agents as well as AIO; use the regular interactive setup path only on older Agents.
 

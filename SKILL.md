@@ -191,6 +191,20 @@ Use these structured forms only after capability/feature detection confirms them
 
 Keep device enrollment, browser integration, and artifact updates as separate states. A browser failure must not erase valid device enrollment. An Agent update must not force pairing when authorization remains valid.
 
+## Reset enrollment for another test round
+
+Use the public Agent lifecycle commands; never delete Agent state files yourself.
+
+For the current personal computer, first state the effects: the operation revokes only the current Device, stops its platform daemon, and removes local OAuth/device keys/Secret Cache. It preserves the Agent binary, browser extension and Native Messaging installation, browser profile/Cookies, restored files, central Secrets, browser Session Snapshots, and site consent. After explicit confirmation, use this command only when `capabilities.enrollment.features` contains `unenroll-self` or `help` lists it:
+
+```text
+credential-agent device unenroll --yes --reason "reset for end-to-end test" --output json
+```
+
+Accept completion only when the result is `succeeded` with `central_revoked=true` and `local_state_cleared=true`. If it returns `partial`, the center has already revoked the Device but local cleanup is incomplete; fix the reported daemon or cleanup failure and rerun the same `device unenroll` command, which confirms the authoritative revoked state before continuing. Do not run `setup` first. A central revoke failure that cannot confirm `revoked` intentionally preserves all local state. If an older Agent lacks this command, update it or revoke the current Device from another signed-in personal computer; do not imitate unenrollment by removing files.
+
+Do not run self-unenrollment on a device-only cloud endpoint. Revoke that target's exact recorded Device ID from a signed-in personal computer, then use the target Connector or environment lifecycle to reset its local overlay/state. An `external` daemon manager is owned by its Supervisor and must be stopped/reset by that owner. For repeated CUA tests, keep the source personal computer enrolled unless the test explicitly covers source enrollment; normally reset only the exact CUA Device ID and the CUA overlay.
+
 ## Completion criteria
 
 Report readiness in two layers. `device_ready` requires:

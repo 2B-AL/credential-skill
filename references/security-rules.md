@@ -45,6 +45,8 @@ Secret values must be entered through Agent's no-echo prompt. Environment variab
 
 Before revoke or cleanup, state whether the action affects central snapshots, future synchronization, target-browser cookies, restored files, or local cached resources. Do not imply that `browser revoke` clears every already-restored browser cookie unless the running Agent explicitly reports that result.
 
+Use `credential-agent device unenroll` for current-personal-device cleanup only when the installed Agent advertises it. Never manually remove Agent state or OS-keystore entries. Require central revocation before local identity deletion, and treat a partial result as still requiring local repair. Device-only or externally supervised targets must be revoked by exact Device ID from a personal computer and reset by their environment owner.
+
 ## Logs
 
 Allowed: command name, resource reference, device display name/type, Agent or extension version, job ID, status/error code, timestamp, duration, retry count.
