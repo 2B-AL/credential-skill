@@ -36,6 +36,18 @@ class CuaConnectorContractTests(unittest.TestCase):
         self.assertIn("only then runs Restore in the same Job", command_map)
         self.assertNotIn("with its restore task", skill)
 
+    def test_cua_pair_auto_and_reset_stay_adapter_scoped(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        security = (ROOT / "references" / "security-rules.md").read_text(encoding="utf-8")
+        troubleshooting = (ROOT / "references" / "troubleshooting.md").read_text(encoding="utf-8")
+        self.assertIn("credential-agent pair-auto", skill)
+        self.assertIn("credential-agent reset-e2e", skill)
+        self.assertIn("Linux sandbox", skill)
+        self.assertIn("one-time HPKE envelope", security)
+        self.assertIn("private regular files", security)
+        self.assertIn("INVOCATION_NOT_FOUND", troubleshooting)
+        self.assertIn("pair_ready=true", troubleshooting)
+
 
 if __name__ == "__main__":
     unittest.main()

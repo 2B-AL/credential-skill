@@ -51,11 +51,12 @@ Do not re-enroll a device whose authorization is valid. Repeated setup should re
 
 ## Initialize a cloud or peer computer
 
-1. When capabilities/help advertises phased cloud setup, use foreground `setup --role cloud --skip-browser [--daemon-manager MANAGER] --pair-phase begin --output json`, approve its short-lived pairing code, then run the matching `--pair-phase complete --pair-timeout 2m --output json`. Use the capability-reported daemon manager on every OS; append `external` only when reported. Never put either call in a generic background task.
-2. On an older Agent without phased setup, run `credential-agent setup --role cloud --skip-browser` interactively and use its reported daemon manager.
-3. If a separate, already logged-in personal-computer execution channel is available, show the pending device to the user. After explicit approval, prefer its absolute Agent path with `credential-agent pair --approve --output json CODE`; use interactive `credential-agent pair CODE` only for an older Agent without these flags.
-4. Otherwise show exactly one local approval command. Do not copy device credentials or OAuth tokens between computers.
-5. Wait for the cloud setup process to finish, then complete browser setup and run `doctor --strict`.
+1. When the target is the configured development my-cua and the installed `my-cua-dev` Skill exposes `credential-agent pair-auto`, use `python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-agent pair-auto` after the user has explicitly authorized pairing/sync to that target. The target code must travel only inside the Agent-to-Agent one-time encrypted relay; it must not enter model context, terminal output, files, or API logs. This CUA adapter also loads and connects the unpacked extension before approval, then verifies the same connection after enrollment.
+2. For every other target, when capabilities/help advertises phased cloud setup, use foreground `setup --role cloud --skip-browser [--daemon-manager MANAGER] --pair-phase begin --output json`, approve its short-lived pairing code, then run the matching `--pair-phase complete --pair-timeout 2m --output json`. Use the capability-reported daemon manager on every OS; append `external` only when reported. Never put either call in a generic background task.
+3. On an older Agent without phased setup, run `credential-agent setup --role cloud --skip-browser` interactively and use its reported daemon manager.
+4. If a separate, already logged-in personal-computer execution channel is available, show the pending device to the user. After explicit approval, prefer its absolute Agent path with `credential-agent pair --approve --output json CODE`; use interactive `credential-agent pair CODE` only for an older Agent without these flags.
+5. Otherwise show exactly one local approval command. Do not copy device credentials or OAuth tokens between computers.
+6. Wait for the cloud setup process to finish, then complete browser setup and run `doctor --strict`.
 
 Never store the pairing code in a file. Regenerate it after expiry.
 
@@ -86,7 +87,8 @@ When a target has a Credential Agent Connector, let that Connector own `prepare`
 For the configured development my-cua, invoke the local `$my-cua-dev` script before target restore:
 
 ```text
-python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser ensure
+python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-agent pair-auto  # only when unpaired
+python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser ensure  # idempotent repair/check
 ```
 
 Do not delegate a CUA model task to install the extension. The command is an idempotent Connector operation and creates no model run. This conditional integration does not replace the generic Linux/macOS unpacked workflow.
@@ -204,6 +206,14 @@ credential-agent device unenroll --yes --reason "reset for end-to-end test" --ou
 Accept completion only when the result is `succeeded` with `central_revoked=true` and `local_state_cleared=true`. If it returns `partial`, the center has already revoked the Device but local cleanup is incomplete; fix the reported daemon or cleanup failure and rerun the same `device unenroll` command, which confirms the authoritative revoked state before continuing. Do not run `setup` first. A central revoke failure that cannot confirm `revoked` intentionally preserves all local state. If an older Agent lacks this command, update it or revoke the current Device from another signed-in personal computer; do not imitate unenrollment by removing files.
 
 Do not run self-unenrollment on a device-only cloud endpoint. Revoke that target's exact recorded Device ID from a signed-in personal computer, then use the target Connector or environment lifecycle to reset its local overlay/state. An `external` daemon manager is owned by its Supervisor and must be stopped/reset by that owner. For repeated CUA tests, keep the source personal computer enrolled unless the test explicitly covers source enrollment; normally reset only the exact CUA Device ID and the CUA overlay.
+
+For the configured development my-cua, use its atomic reset adapter after an explicit test-reset request:
+
+```text
+python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-agent reset-e2e
+```
+
+It first revokes the exact device ID through the signed-in personal Agent, persists only the non-secret revocation checkpoint for safe retry, then asks the trusted Connector to clear restored browser state, remove only the fixed unpacked extension, disable Developer mode, remove Native Messaging, stop/uninstall the target daemon, and clear Agent-owned local identity. Accept only `pair_ready=true`; do not replace it with manual state-file deletion or a VM reset.
 
 ## Completion criteria
 

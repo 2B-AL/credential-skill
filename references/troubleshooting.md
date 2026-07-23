@@ -55,6 +55,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 - Agent orchestration appears stuck after sending `Y\n`: the interactive CLI uses raw terminal ReadLine and may still be waiting for carriage return. Stop guessing prompt state; after explicit user approval use `pair --approve --output json CODE` on a compatible Agent.
 - Structured pair returns `CLI_USAGE`: supply exactly one of `--approve` or `--deny`, plus the pairing code.
 - Do not send pairing codes through persistent files or logs.
+- On configured my-cua, prefer `credential-agent pair-auto`. `INVOCATION_NOT_FOUND` must not trigger cached-session reuse: the operator route owns a fresh temporary session. `credential_operator_token_unavailable` means rerun that dev environment's `api-start` so the private token is generated and copied locally; never paste the token into Skill JSON or chat.
 - On root AIO, prefer foreground `setup --pair-phase begin --output json`, approve the exact pending device, then call `setup --pair-phase complete --output json`. On Windows, continue using its reported platform manager and interactive setup.
 
 ## Browser integration
@@ -62,6 +63,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 - Inspect `browser status --output json` and its `distribution_mode` before reopening anything. Do not infer the repair path from Windows/Linux alone.
 - In generic `unpacked` mode, Chrome opens but not `chrome://extensions/`: rerun the Agent open-install step, then use the safe browser-assist script and visible UI.
 - In my-cua `unpacked` mode, run the Connector's `credential-browser ensure`; do not duplicate it with `open-install`, screenshot-driven UI automation, or extension-page UIA. CDP owns Chrome controls and UIA is limited to the native folder picker.
+- After a my-cua E2E test, `credential-agent reset-e2e` must return `pair_ready=true`. A missing device assertion must fail before any browser mutation. A failed Guest artifact push or Broker build-key mismatch is a deployment failure, not advisory readiness; rerun `dev-env api-start` and do not start pairing until the Connector probe succeeds.
 - In either managed mode, never open developer mode or load a directory. An absent or stale extension is a Chrome Policy, Store publication, release identity, or signed-artifact error.
 - `managed_store` reports missing identity: configure the exact published Store item ID, build ID, and numeric manifest version in the platform Connector; do not fall back to the self-hosted ID.
 - `managed_self_hosted` reports provider unavailable: verify the enterprise-management prerequisite, signed CRX/update manifest state, Agent loopback provider, and Chrome policy.

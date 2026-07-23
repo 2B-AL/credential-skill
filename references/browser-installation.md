@@ -109,6 +109,8 @@ For a my-cua target whose contract is `unpacked`, do not repeat the generic visi
 4. Return to Agent `wait`, policy configuration, and structured `browser status` for success. An extension card or closed dialog alone is not success.
 5. Never use screenshots, arbitrary JavaScript evaluation, profile file edits, or CDP Network/Storage Cookie methods to advance the successful path. A screenshot is terminal diagnostic evidence only.
 
+For repeated my-cua E2E tests, the same Connector owns the inverse transition: clear only policy-known restored sites while the extension is connected, remove the exact fixed-ID extension through authenticated CDP, confirm the Chrome removal dialog semantically, disable Developer mode through bounded UIA, then let Agent-owned commands remove Native Messaging and local enrollment. Do not edit Chrome profile files or treat a missing extension as a reset failure.
+
 Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify the browser. On Linux, use the browser opened by Agent; it detects `google-chrome`, `google-chrome-stable`, `chromium`, and `chrome`. Do not rely on Unix executable bits surviving GitHub ZIP installation.
 
 ## Manual fallback

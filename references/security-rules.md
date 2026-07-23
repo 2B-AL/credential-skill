@@ -31,6 +31,7 @@ Secret values must be entered through Agent's no-echo prompt. Environment variab
 - Do not infer permission to sync every website from permission to sync one website.
 - Do not silently select among multiple devices with similar names.
 - Treat pairing codes as short-lived. Do not persist or reuse them.
+- A trusted my-cua `pair-auto` relay may carry only a one-time HPKE envelope from the target Agent to the already signed-in personal Agent. The target API must never return plaintext, and the client must emit only the approved Device ID and final status. Require the exact target display name/type inside the authenticated envelope before approval.
 - Never run cloud setup or pairing through a generic background task that retains commands or stdout. On every Agent that advertises phased setup, use foreground `setup --pair-phase begin|complete` with its capability-reported daemon manager. Use the legacy interactive path only when phased setup is absent.
 
 ## Browser automation
@@ -46,6 +47,8 @@ Secret values must be entered through Agent's no-echo prompt. Environment variab
 Before revoke or cleanup, state whether the action affects central snapshots, future synchronization, target-browser cookies, restored files, or local cached resources. Do not imply that `browser revoke` clears every already-restored browser cookie unless the running Agent explicitly reports that result.
 
 Use `credential-agent device unenroll` for current-personal-device cleanup only when the installed Agent advertises it. Never manually remove Agent state or OS-keystore entries. Require central revocation before local identity deletion, and treat a partial result as still requiring local repair. Device-only or externally supervised targets must be revoked by exact Device ID from a personal computer and reset by their environment owner.
+
+For my-cua repeated E2E reset, use only its authenticated `reset-e2e` operator action after exact central revocation. The operator token must live in private regular files on both ends, never in Skill config JSON, arguments, logs, or chat. A reset is complete only when the Connector re-probes `setup_required` with no enrollment, extension heartbeat, Native Messaging registration, or unpacked install evidence.
 
 ## Logs
 
