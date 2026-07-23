@@ -637,9 +637,9 @@ Skill 不自行解压或编辑扩展文件。
 
 只看到扩展目录存在不代表已经安装。
 
-### 14.3 可视化自动安装
+### 14.3 可视化自动安装与 my-cua Connector
 
-Skill 优先使用 Codex 可用的浏览器或电脑操作能力。
+通用 `unpacked` 目标优先使用 Codex 可用的浏览器或电脑操作能力。明确选择 `unpacked` 的开发 my-cua 不重复这套操作，而是调用其 Credential Agent Connector。
 
 操作顺序：
 
@@ -650,10 +650,12 @@ Skill 优先使用 Codex 可用的浏览器或电脑操作能力。
 5. 点击“加载未打包的扩展程序”。
 6. 在系统文件选择器中输入 Agent 返回的绝对路径。
 7. 选择目录。
-8. 调用 `browser wait --phase connected`。
+8. 调用 `browser wait --for connected`。
 9. 检查运行版本与准备版本一致。
 
 必须基于可访问性标签、页面文字和可见状态操作，不使用固定屏幕坐标作为唯一定位方式。
+
+my-cua Connector 必须使用 Agent 返回的受管目录和固定扩展 ID，通过认证 CDP 的 Accessibility tree 操作 `chrome://extensions/`，并且只在 Chrome 原生目录选择器中使用 UIA。它不得使用截图循环、任意 JavaScript、Profile 文件修改或 CDP Cookie/Storage 方法；安装后仍由 Agent 的结构化状态和 Native Messaging 心跳判定成功。
 
 支持中文和英文常见标签：
 

@@ -60,7 +60,8 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 ## Browser integration
 
 - Inspect `browser status --output json` and its `distribution_mode` before reopening anything. Do not infer the repair path from Windows/Linux alone.
-- In `unpacked` mode, Chrome opens but not `chrome://extensions/`: rerun the Agent open-install step, then use the safe browser-assist script and visible UI.
+- In generic `unpacked` mode, Chrome opens but not `chrome://extensions/`: rerun the Agent open-install step, then use the safe browser-assist script and visible UI.
+- In my-cua `unpacked` mode, run the Connector's `credential-browser ensure`; do not duplicate it with `open-install`, screenshot-driven UI automation, or extension-page UIA. CDP owns Chrome controls and UIA is limited to the native folder picker.
 - In either managed mode, never open developer mode or load a directory. An absent or stale extension is a Chrome Policy, Store publication, release identity, or signed-artifact error.
 - `managed_store` reports missing identity: configure the exact published Store item ID, build ID, and numeric manifest version in the platform Connector; do not fall back to the self-hosted ID.
 - `managed_self_hosted` reports provider unavailable: verify the enterprise-management prerequisite, signed CRX/update manifest state, Agent loopback provider, and Chrome policy.

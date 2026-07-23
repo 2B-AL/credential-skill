@@ -12,7 +12,7 @@
 
 ## Capability boundary
 
-Official unmanaged Chrome on Windows/macOS and Chromium on Linux cannot silently install a private unpacked extension. Unmanaged Windows can automatically install only a Chrome Web Store item; off-store force installation is reserved for domain/enterprise-managed Windows. This Skill may prepare signed artifacts and assist visible UI, but it must not modify browser profiles or bypass user-gesture requirements.
+Official unmanaged Chrome on Windows/macOS and Chromium on Linux cannot silently force-install a private unpacked extension. A development CUA may automate the same visible Developer mode and Load unpacked flow through its trusted desktop Connector, provided it does not modify browser profile files or bypass user-gesture requirements. Off-store policy force installation remains reserved for domain/enterprise-managed Windows.
 
 On Linux, the Agent supports both native-host locations:
 
@@ -39,11 +39,11 @@ The status contract also exposes `distribution_mode`, `expected_extension_id`, `
 
 | Mode | Intended environment | Install action |
 |---|---|---|
-| `unpacked` | personal macOS/Linux and Linux sandboxes | visible one-time Load unpacked |
-| `managed_store` | unmanaged Windows CUA | Chrome Web Store policy; no developer-mode UI |
+| `unpacked` | personal macOS/Linux, Linux sandboxes, and my-cua development Windows | visible one-time Load unpacked; my-cua Connector may drive it deterministically |
+| `managed_store` | environment explicitly configured for a published Store item | Chrome Web Store policy; no developer-mode UI |
 | `managed_self_hosted` | AD/Azure AD/Chrome Enterprise Windows | verified CRX through Agent loopback policy; no developer-mode UI |
 
-`managed_store` requires a published Store item. A missing item ID/build/manifest version is a release-configuration blocker, not a reason to fall back to UI loops or self-hosted CRX.
+`managed_store` requires a published Store item. A missing item ID/build/manifest version is a release-configuration blocker only for targets that selected this mode; it does not change an explicitly `unpacked` CUA contract.
 
 The compatible fallback for older Agents is:
 
@@ -61,14 +61,14 @@ Both forms install Native Messaging, download and verify the signed extension ar
 
 ## State machine
 
-1. Run the distribution-appropriate `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. For `managed_store`, the platform must add exact Store ID/build/manifest flags. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
+1. Run the distribution-appropriate `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. For my-cua unpacked mode, the Connector owns this invocation and validates the exact returned directory and fixed Extension ID. For `managed_store`, the platform must add exact Store ID/build/manifest flags. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
 2. Run `browser status --output json`. Require connected runtime ID/build/manifest to match expected values.
 3. In unpacked mode only, run `open-install` when disconnected or stale and repair the exact Agent-managed directory. In managed modes, installation or update failure is a policy/release error; do not open developer mode.
 4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first restore task will deliver the exact policy.
 5. Inspect `browser status` again. If every reported supported site is authorized, skip permission UI. Otherwise run `open-permissions`, approve exact origins, and yield on `wait --for permissions`.
 6. Continue to `doctor --strict --output json` and require Agent-observed state; do not infer success from an extension card or dialog alone.
 
-The `open-*` JSON contract is request-oriented: `requested=true` and `verified=false` means Chrome accepted a launch request, not that the internal page is visibly active. Confirm `chrome://extensions/` or the extension options URL through the visible browser-control channel provided for the target, and navigate explicitly if the launch request did not change the page.
+The `open-*` JSON contract is request-oriented: `requested=true` and `verified=false` means Chrome accepted a launch request, not that the internal page is visibly active. Generic targets confirm the internal page through their visible browser-control channel. A my-cua Connector instead opens `chrome://extensions/` through its authenticated CDP broker and uses the fixed extension options URL for permission handoff.
 
 If feature detection shows that staged commands are unavailable, run legacy `browser setup` in a yielded terminal and follow the same visible UI rules.
 
@@ -98,6 +98,16 @@ Unpacked installation procedure only:
 6. Let Agent determine whether the heartbeat version matches.
 
 Managed installation has no extension-management procedure. Once Chrome Policy installs the extension, the only visible browser action that may remain is exact Origin permission authorization. A my-cua Connector may use its authenticated CDP broker to open only `chrome-extension://<expected-id>/options.html`; do not use raw CDP, arbitrary page eval, or Cookie methods.
+
+### my-cua Connector-owned unpacked automation
+
+For a my-cua target whose contract is `unpacked`, do not repeat the generic visible procedure from the Skill. The Connector must:
+
+1. Use Agent `browser prepare` and accept only the Agent-managed absolute `chrome-extension` directory and fixed Extension ID.
+2. Use authenticated CDP to open/foreground `chrome://extensions/`, inspect its Accessibility tree, and activate Developer mode, Load unpacked, or the matching extension card's Reload action. If no unique actionable CDP node exists, fail closed; do not fall back to extension-page UIA.
+3. Use UIA only after a foreground window matches both the Chrome process and `Select Folder`/`选择文件夹`; enter the exact Agent directory without coordinates.
+4. Return to Agent `wait`, policy configuration, and structured `browser status` for success. An extension card or closed dialog alone is not success.
+5. Never use screenshots, arbitrary JavaScript evaluation, profile file edits, or CDP Network/Storage Cookie methods to advance the successful path. A screenshot is terminal diagnostic evidence only.
 
 Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify the browser. On Linux, use the browser opened by Agent; it detects `google-chrome`, `google-chrome-stable`, `chromium`, and `chrome`. Do not rely on Unix executable bits surviving GitHub ZIP installation.
 

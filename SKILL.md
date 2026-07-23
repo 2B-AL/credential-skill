@@ -77,11 +77,20 @@ credential-agent browser wait --for permissions --timeout 10m --output json
 
 Choose the preparation branch from `capabilities.browser.distribution_mode` or the target Connector contract; never infer it from the OS alone:
 
-- `unpacked`: personal computers and Linux sandboxes. Use the sequence above, including `open-install` only when status requires it.
-- `managed_store`: unmanaged Windows CUA. The platform Connector must supply the exact Chrome Web Store `extension_id`, expected build id, and numeric manifest version to `browser prepare`. Do not substitute the unpacked/self-hosted extension ID, do not download a CRX, and do not open `chrome://extensions`.
+- `unpacked`: personal computers, Linux sandboxes, and a development CUA whose Connector explicitly owns visible unpacked installation. Generic endpoints use the sequence above. A my-cua Connector instead owns `prepare`, canonical Browser Owner launch, CDP extension-page actions, and the constrained native folder-picker step.
+- `managed_store`: only a target whose platform contract explicitly selects a published Chrome Web Store item. The Connector must supply the exact Store `extension_id`, expected build id, and numeric manifest version. Do not infer this mode merely because the target is Windows.
 - `managed_self_hosted`: only an AD/Azure AD/Chrome Enterprise managed Windows target. Agent verifies CRX/update metadata and serves the policy update from its loopback provider. Do not select this merely because the target is Windows.
 
-When a target has a Credential Agent Connector, let that Connector own `prepare`, Browser Owner launch, and version readiness. Use the target control channel only for the exact permission handoff it reports. This keeps the Skill generic for Linux sandboxes and other endpoints.
+When a target has a Credential Agent Connector, let that Connector own `prepare`, Browser Owner launch, installation/reload, and version readiness. In my-cua unpacked mode, do not separately run `open-install` or start screenshot-driven UI automation: the Connector uses authenticated CDP for `chrome://extensions/` and UIA only for the Chrome-owned native folder picker. Use the target control channel only for the exact permission handoff it reports. This keeps the Skill generic for Linux sandboxes and other endpoints.
+
+For the configured development my-cua, invoke the local `$my-cua-dev` script before target restore:
+
+```text
+python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser ensure
+```
+
+Do not delegate a CUA model task to install the extension. The command is an idempotent Connector operation and creates no model run. This conditional integration does not replace the generic Linux/macOS unpacked workflow.
+If it returns `ready=true, connected=false`, continue device pairing and rerun the check afterward; this is installation readiness only and must not be reported as `browser_ready`.
 
 `prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides which UI action is actually needed. Do not reopen installation or permissions pages when the corresponding state is already ready.
 
@@ -103,10 +112,10 @@ Current Linux Agents also discover same-user running Chrome/Chromium processes, 
 
 Run `browser wait` or the legacy `browser setup` in a yielded terminal session because it waits for extension connection and permissions. While it waits:
 
-1. Prefer visible UI automation through browser/computer control when available.
+1. Prefer the target Credential Agent Connector when it declares deterministic browser setup; otherwise use visible UI automation through browser/computer control when available.
 2. In `unpacked` mode only, use semantic labels such as `开发者模式`, `Developer mode`, `加载未打包的扩展程序`, `Load unpacked`, `选择文件夹`, and `Select Folder`.
 3. In `unpacked` mode only, select the Agent-managed `chrome-extension` directory already opened by the Agent.
-4. In either managed mode, never enter developer mode or select a directory. If the managed extension is absent, stop on the Connector/Agent policy or release error.
+4. In either managed mode, never enter developer mode or select a directory. If the managed extension is absent, stop on the Connector/Agent policy or release error. In my-cua unpacked mode, let the Connector own these actions instead of duplicating them here.
 5. If UI automation is unavailable, leave the detected browser and the required page open and ask for the single minimum action described in the browser reference.
 6. Do not ask the user to return to the terminal or type that installation is complete. Let Agent heartbeat detection continue.
 7. On the extension options page, activate only the exact requested site permission control (or the bounded “enable supported sites” capability control), verify the displayed origins match Agent-delivered policy, then let the Agent validate permissions.

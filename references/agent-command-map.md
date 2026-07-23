@@ -142,10 +142,13 @@ credential-agent browser wait --for permissions --timeout 10m --output json
 Select the preparation contract from Agent capabilities or the target Connector:
 
 ```text
-# Personal computers and Linux sandboxes
+# Personal computers and Linux sandboxes using the generic workflow
 credential-agent browser prepare --distribution-mode unpacked --output json
 
-# Unmanaged Windows CUA; values must come from the platform release configuration
+# Development my-cua: let its Connector own unpacked prepare/install/reload
+python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser ensure
+
+# Only a target explicitly configured for a published Store item
 credential-agent browser prepare --distribution-mode managed_store \
   --extension-id STORE_ITEM_ID \
   --expected-build-id RELEASE_BUILD_ID \
@@ -156,7 +159,7 @@ credential-agent browser prepare --distribution-mode managed_store \
 credential-agent browser prepare --distribution-mode managed_self_hosted --output json
 ```
 
-Never invent or substitute Store identity fields. When a target Connector owns preparation, observe its readiness state instead of issuing a second prepare. Call `open-install` only in unpacked mode and only when `browser status` proves it is needed. `open-permissions` remains a visible exact-Origin handoff in every mode. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; that endpoint receives the exact policy with its first restore task. Use legacy `browser setup` as the feature-detected fallback only on older Agents.
+Never invent or substitute Store identity fields. When a target Connector owns preparation, observe its readiness state instead of issuing a second prepare. For my-cua, `credential-browser ensure` is the idempotent Connector operation and must not create a model task. Call `open-install` only in the generic unpacked workflow and only when `browser status` proves it is needed. `open-permissions` remains a visible exact-Origin handoff in every mode. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; that endpoint receives the exact policy with its first restore task. Use legacy `browser setup` as the feature-detected fallback only on older Agents.
 
 All currently authenticated supported sites:
 

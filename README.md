@@ -177,23 +177,23 @@ Codex 使用本 Skill 时会执行以下流程：
 
 | 模式 | 适用环境 | 安装方式 |
 | --- | --- | --- |
-| `unpacked` | 个人 macOS/Linux、Linux sandbox | 一次可见的 Load unpacked |
-| `managed_store` | 未受企业管理的 Windows CUA | Chrome Web Store 策略预装 |
+| `unpacked` | 个人 macOS/Linux、Linux sandbox、明确选择该模式的开发 my-cua | 一次可见的 Load unpacked；my-cua Connector 可确定性完成操作 |
+| `managed_store` | 明确配置了已发布 Chrome Web Store item 的环境 | Chrome Web Store 策略预装 |
 | `managed_self_hosted` | AD/Entra ID/Chrome Enterprise 管理的 Windows | Agent 校验 CRX 后通过 loopback update provider 安装 |
 
-`managed_store` 必须使用已发布 Store item 的精确扩展 ID、build ID 和数字 manifest version；缺少任一字段都是发布配置阻塞，不能退回开发者模式或冒用自托管扩展 ID。Linux Agent 继续支持 Chrome 的 `~/.config/google-chrome/NativeMessagingHosts` 和 Chromium 的 `~/.config/chromium/NativeMessagingHosts` 默认位置，并能发现同用户运行浏览器的显式 `--user-data-dir`。目录校验和 Native Messaging 配置安装均由 Agent 完成，Skill 不直接复制或链接 manifest。
+`managed_store` 必须使用已发布 Store item 的精确扩展 ID、build ID 和数字 manifest version；缺少任一字段只会阻塞已经明确选择该模式的环境，不能据此改变 my-cua 的 `unpacked` 契约，也不能冒用自托管扩展 ID。Linux Agent 继续支持 Chrome 的 `~/.config/google-chrome/NativeMessagingHosts` 和 Chromium 的 `~/.config/chromium/NativeMessagingHosts` 默认位置，并能发现同用户运行浏览器的显式 `--user-data-dir`。目录校验和 Native Messaging 配置安装均由 Agent 完成，Skill 不直接复制或链接 manifest。
 
 `unpacked` 模式流程是：
 
 1. Agent 自动下载并验证扩展制品。
 2. Agent 自动解压到固定管理目录。
 3. Agent 自动安装 Native Messaging 配置。
-4. Agent 尝试打开 `chrome://extensions/` 和扩展目录。
-5. Codex 在可见且已解锁的桌面上尽量通过 UI 完成：
+4. 通用目标由 Agent 尝试打开 `chrome://extensions/` 和扩展目录；my-cua 由 Connector 启动规范 Browser Owner，并通过认证 CDP 打开扩展页。
+5. 通用目标由 Codex 在可见且已解锁的桌面上尽量通过语义 UI 完成；my-cua 则由 Connector 使用 CDP 操作扩展页，只在 Chrome 原生目录选择器中使用 UIA：
    - 开启“开发者模式”；
    - 点击“加载未打包的扩展程序”；
    - 选择 Agent 已经打开的 `chrome-extension` 目录。
-6. 如果 UI 自动化不可用，用户只需完成这一次 Chrome 强制要求的可见操作。
+6. 通用目标在 UI 自动化不可用时由用户完成这一次可见操作；my-cua Connector 找不到唯一可操作节点时失败关闭，不回退到截图循环或扩展页 UIA。
 7. Agent 根据扩展心跳确认实际运行版本，而不是仅根据目录存在判断成功。
 8. 在扩展授权页面点击“启用全部支持的网站”。扩展只申请 Vault 当前策略中的精确 HTTPS Origin；以后新增站点时可能需要再确认一次新 Origin。
 
@@ -204,6 +204,8 @@ lnpfljjigmgmakiclchpnoehbbceomeb
 ```
 
 Skill 不会修改 Chrome Profile、Cookie 数据库、Secure Preferences，也不会伪造 Chrome 企业管理状态。
+
+开发 my-cua 在同步前通过本地 `my-cua-dev` skill 执行 `credential-browser ensure`。这是幂等 Connector 操作，不创建 CUA 模型任务；它只替代 my-cua 的安装编排，不会把本 Skill 变成 CUA 专用流程，也不改变 Linux/macOS 的通用 `unpacked` 路径。
 
 受管模式没有扩展管理 UI 操作。Chrome Policy 完成预装后，CUA Connector 只可通过认证 CDP 通道打开精确的 `chrome-extension://<expected-id>/options.html`；不得暴露 raw CDP、任意页面 eval 或 Cookie 方法。由于 Chrome 的 optional host permission 仍要求用户手势，用户可能需要在扩展页对 Agent 签发策略中的精确 Origin 做一次可见确认。
 
