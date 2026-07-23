@@ -64,7 +64,7 @@ Both forms install Native Messaging, download and verify the signed extension ar
 1. Run the distribution-appropriate `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. For my-cua unpacked mode, the Connector owns this invocation and validates the exact returned directory and fixed Extension ID. For `managed_store`, the platform must add exact Store ID/build/manifest flags. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
 2. Run `browser status --output json`. Require connected runtime ID/build/manifest to match expected values.
 3. In unpacked mode only, run `open-install` when disconnected or stale and repair the exact Agent-managed directory. In managed modes, installation or update failure is a policy/release error; do not open developer mode.
-4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first restore task will deliver the exact policy.
+4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first target Sync Job will deliver the exact policy through a metadata-only preparation task before Restore.
 5. Inspect `browser status` again. If every reported supported site is authorized, skip permission UI. Otherwise run `open-permissions`, approve exact origins, and yield on `wait --for permissions`.
 6. Continue to `doctor --strict --output json` and require Agent-observed state; do not infer success from an extension card or dialog alone.
 
@@ -130,7 +130,7 @@ Do not ask the user to type `Y` or confirm completion in the terminal. Leave Age
 
 After connection, Agent fetches the currently enabled Vault policies and opens the extension options page. Chrome requires `optional_host_permissions` requests to originate from a user gesture, including for a preinstalled extension. Use visible UI to activate the exact site permission control and accept the expected host-permission prompt. Stop if the prompt requests permissions outside the exact origins displayed for those policies.
 
-The policy authority is Credential Vault. Extension heartbeat only reports the policy digests it cached and the origins the browser granted. Do not assume a fixed count or silently omit newly configured sites. On a device-only cloud endpoint, the first restore task may install one policy and trigger its exact permission prompt; leave Agent running so it can retry after approval.
+The policy authority is Credential Vault. Extension heartbeat only reports the policy digests it cached and the origins the browser granted. Do not assume a fixed count or silently omit newly configured sites. On a device-only cloud endpoint, the first target Sync Job may install one policy through a metadata-only preparation task and wait before Restore. Leave Agent running, approve only the exact displayed origins, and let the same Job continue after the authorization heartbeat.
 
 Repeated `browser setup` and selected-site sync are digest-aware. If the extension heartbeat already reports the exact Vault digest, Agent does not resend that policy or wait another 30 seconds for the same digest. Do not force a policy refresh merely because setup is being repeated; let Agent update only missing or stale policies.
 

@@ -120,7 +120,7 @@ Run `browser wait` or the legacy `browser setup` in a yielded terminal session b
 6. Do not ask the user to return to the terminal or type that installation is complete. Let Agent heartbeat detection continue.
 7. On the extension options page, activate only the exact requested site permission control (or the bounded “enable supported sites” capability control), verify the displayed origins match Agent-delivered policy, then let the Agent validate permissions.
 
-Site support is controlled by Credential Vault dynamic policy, not by an extension build-time registry. Trust only policies that the Agent fetched and verified. The extension heartbeat reports cached policy digests and granted origins; do not treat it as the policy authority or hardcode site names/counts. On a device-only cloud endpoint, a site's policy may first arrive with its restore task. If Agent opens the permission page, approve only the exact origins displayed for that policy and let Agent retry.
+Site support is controlled by Credential Vault dynamic policy, not by an extension build-time registry. Trust only policies that the Agent fetched and verified. The extension heartbeat reports cached policy digests and granted origins; do not treat it as the policy authority or hardcode site names/counts. On a device-only cloud endpoint, a site's policy may first arrive while its target Sync Job is being processed. A compatible Agent sends a metadata-only `UPDATE_SITE_POLICY`, keeps the same Job active until the extension heartbeat confirms the exact digest and origins are authorized, and only then sends the Cookie-bearing Restore task. If Agent opens the permission page, approve only the exact origins displayed for that policy; do not create a second Job.
 
 `启用全部支持的网站` is capability authorization, not a request to sync every site. For a user request naming GitHub, invoke selected-site sync for GitHub only. Use `browser sync --all` only when the user explicitly requests all supported authenticated sites.
 
@@ -193,7 +193,7 @@ Report readiness in two layers. `device_ready` requires:
 
 - Native Messaging manifest is valid.
 - Chrome/Chromium extension is connected and its running version matches the Agent-managed version.
-- On a personal computer, all currently enabled Vault site policies are installed and their required origins are authorized. A device-only cloud endpoint may authorize a policy when its first restore task arrives.
+- On a personal computer, all currently enabled Vault site policies are installed and their required origins are authorized. A device-only cloud endpoint may authorize a policy while its first target Sync Job is being processed.
 - `doctor --strict` exits successfully.
 
 If the user explicitly skips browser integration, report `device_ready=true` and `browser_ready=skipped`. A browser repair failure must not downgrade valid device enrollment. Never report a partial browser state as fully complete.

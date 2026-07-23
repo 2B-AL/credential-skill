@@ -26,6 +26,16 @@ class CuaConnectorContractTests(unittest.TestCase):
         self.assertIn("credential-browser ensure", command_map)
         self.assertNotIn("# Unmanaged Windows CUA", command_map)
 
+    def test_target_permission_preparation_keeps_the_original_sync_job(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        browser = (ROOT / "references" / "browser-installation.md").read_text(encoding="utf-8")
+        command_map = (ROOT / "references" / "agent-command-map.md").read_text(encoding="utf-8")
+        self.assertIn("metadata-only `UPDATE_SITE_POLICY`", skill)
+        self.assertIn("keeps the same Job active", skill)
+        self.assertIn("let the same Job continue", browser)
+        self.assertIn("only then runs Restore in the same Job", command_map)
+        self.assertNotIn("with its restore task", skill)
+
 
 if __name__ == "__main__":
     unittest.main()
