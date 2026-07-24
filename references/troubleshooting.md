@@ -56,6 +56,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 - Structured pair returns `CLI_USAGE`: supply exactly one of `--approve` or `--deny`, plus the pairing code.
 - Do not send pairing codes through persistent files or logs.
 - On configured my-cua, prefer `credential-agent pair-auto`. `INVOCATION_NOT_FOUND` must not trigger cached-session reuse: the operator route owns a fresh temporary session. `credential_operator_token_unavailable` means rerun that dev environment's `api-start` so the private token is generated and copied locally; never paste the token into Skill JSON or chat.
+- `PAIR_RELAY_CLOCK_SKEW` is a UTC clock-offset failure, not a timezone-name/display failure. `PAIR_RELAY_EXPIRY_WINDOW` means the signed validity interval exceeds policy. Update both Agents to the current signed release before retrying; do not add sleeps or expose the envelope. If enrollment completed but browser setup failed, rerun my-cua `pair-auto`: it must resume by the exact enrolled Device ID rather than create a second pairing.
 - On root AIO, prefer foreground `setup --pair-phase begin --output json`, approve the exact pending device, then call `setup --pair-phase complete --output json`. On Windows, continue using its reported platform manager and interactive setup.
 
 ## Browser integration
