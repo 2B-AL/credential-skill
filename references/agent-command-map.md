@@ -151,6 +151,10 @@ credential-agent browser prepare --distribution-mode unpacked --output json
 # Development my-cua: let its Connector own unpacked prepare/install/reload
 python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser ensure
 
+# Development my-cua exact-site fast path: one workflow session and one Job
+python3 <skill-directory>/scripts/sync-my-cua.py \
+  --agent-path /absolute/path/to/credential-agent github volcengine
+
 # Only a target explicitly configured for a published Store item
 credential-agent browser prepare --distribution-mode managed_store \
   --extension-id STORE_ITEM_ID \
@@ -199,6 +203,8 @@ Do not drive the interactive confirmation by guessing prompt state or sending `Y
 After the `create_sync_job` JSONL phase, keep the source process running and immediately handle any exact-origin permission UI on the target through its own browser channel. The target may be a Linux sandbox or a Windows cloud desktop; this orchestration does not import or call another Skill. If the source result is `pending_target`, resume the same ID with `job wait`; do not rerun `browser sync`.
 
 Current Vault and Agent versions expose this pause as the nonterminal Job/Item status `waiting_permission` with reason `browser_host_permission`. After the target heartbeat confirms the exact policy digest and Origin grant, the same Job emits `restoring_sessions` again and continues. Preserve these states in JSONL; `pending_target` is only the caller's wait timeout result and must not overwrite the stored Job status.
+
+They also expose `waiting_network` with reason `browser_network_unreachable`. A compatible target first probes `PROBE_SITE_REACHABILITY`; after reachability returns, `resumed` moves the same Job to `validating` and only then runs `VALIDATE_SITE`. This path never sends another Restore payload.
 
 The `prepare_browser` phase returns policy counters under `details.policies`:
 

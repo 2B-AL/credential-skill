@@ -91,6 +91,15 @@ python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-agent pair-auto  # only
 python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser ensure  # idempotent repair/check
 ```
 
+For an explicitly approved exact-site transfer to that development CUA, prefer the bundled composite adapter instead of manually sequencing separate tasks:
+
+```text
+python3 <skill-directory>/scripts/sync-my-cua.py \
+  --agent-path /absolute/path/to/credential-agent SITE...
+```
+
+It reuses one my-cua workflow session, consumes the source Agent JSONL until the single Sync Job exists, starts asynchronous exact-site authorization, runs the policy-bounded target network check/fallback, watches the same authorization operation, and waits for the same Job. It never accepts a proxy address, pairing code, Cookie, or secret value. This is a conditional CUA adapter only; Linux sandboxes and generic macOS/Linux targets continue using the generic workflow below.
+
 Do not delegate a CUA model task to install the extension. The command is an idempotent Connector operation and creates no model run. This conditional integration does not replace the generic Linux/macOS unpacked workflow.
 If it returns `ready=true, connected=false`, continue device pairing and rerun the check afterward; this is installation readiness only and must not be reported as `browser_ready`.
 
@@ -153,6 +162,10 @@ For Agent orchestration, once the exact target and site list have already been s
 Treat JSONL as a stage protocol, not localized text: retain `operation_id`, read each phase `status` and `duration_ms`, and wait for the final `result`. For browser sync, inspect `details.policies.checked`, `already_current`, and `updated`; `updated=0` with every checked policy already current means Agent safely skipped policy writes and the 30-second policy heartbeat wait. This is not a skipped login capture or delivery.
 
 Keep the source sync process in a foreground/yielded session and consume JSONL incrementally. As soon as the `create_sync_job` phase succeeds, retain `details.job.id` and immediately inspect the target's own browser status and visible tabs through whatever execution/browser channel was provided for that target. Do this while the same source process continues waiting; do not wait for its fixed delivery window to expire first. If the target shows the exact policy-origin permission page, complete that visible user-gesture flow and let the original Job continue. This is upper-level orchestration and must not depend on a Sandbox Skill or assume the target is Linux.
+
+For my-cua, start `credential-browser authorize-begin SITE...` immediately after `create_sync_job`, then run `credential-browser network-ensure SITE...` and watch the returned operation with `authorize-watch`. The permission mutation is server-side and survives an HTTP client disconnect; a watch is read-only and must not replay `begin`. The network call uses only the dynamic policy's validation URL and a server-configured fallback proxy, never a caller-supplied proxy.
+
+If the target reports `waiting_network` / `browser_network_unreachable`, leave the original Job active. After the Connector restores target reachability, the target Agent reports `resumed` and runs `VALIDATE_SITE` only. Do not repeat Restore, capture, Delivery Grant issuance, or `browser sync`.
 
 For a configured my-cua target, replace repeated cached status reads with its
 request-scoped exact-site adapter while the same source process remains active:

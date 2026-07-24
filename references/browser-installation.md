@@ -70,6 +70,8 @@ Both forms install Native Messaging, download and verify the signed extension ar
 
 The `open-*` JSON contract is request-oriented: `requested=true` and `verified=false` means Chrome accepted a launch request, not that the internal page is visibly active. Generic targets confirm the internal page through their visible browser-control channel. A my-cua Connector instead opens `chrome://extensions/` through its authenticated CDP broker and uses the fixed extension options URL for permission handoff.
 
+my-cua reports extension installation/heartbeat separately from exact-site authorization: `browser_extension_ready=true` can coexist with `browser_site_policy_deferred=true` before the first target Job, or `browser_permission_required=true` after signed policies arrive. Neither state should trigger another unpacked installation. Use asynchronous `authorize-begin` / `authorize-watch` for exact sites so a client timeout cannot make the permission mutation ambiguous.
+
 If feature detection shows that staged commands are unavailable, run legacy `browser setup` in a yielded terminal and follow the same visible UI rules.
 
 This authorization step establishes the allowed capability range only. It must not be translated into a later `browser sync --all`; selected-site requests remain selected-site actions.
@@ -135,6 +137,8 @@ After connection, Agent fetches the currently enabled Vault policies and opens t
 The policy authority is Credential Vault. Extension heartbeat only reports the policy digests it cached and the origins the browser granted. Do not assume a fixed count or silently omit newly configured sites. On a device-only cloud endpoint, the first target Sync Job may install one policy through a metadata-only preparation task and wait before Restore. Leave Agent running, approve only the exact displayed origins, and let the same Job continue after the authorization heartbeat.
 
 Repeated `browser setup` and selected-site sync are digest-aware. If the extension heartbeat already reports the exact Vault digest, Agent does not resend that policy or wait another 30 seconds for the same digest. Do not force a policy refresh merely because setup is being repeated; let Agent update only missing or stale policies.
+
+For deterministic target-network diagnosis, a compatible extension advertises `PROBE_SITE_REACHABILITY`. It opens only the signed policy's validation URL in an inactive tab, watches the main-frame navigation result, returns only `reachable` or `BROWSER_NETWORK_UNREACHABLE`, and closes the tab. It must not return the final URL, network error detail, Cookie, Storage, or page content. A my-cua Connector may apply only its server-configured fallback proxy after this bounded failure; generic Linux/macOS workflows remain network-environment agnostic.
 
 ## Upgrade repair
 

@@ -48,6 +48,18 @@ class CuaConnectorContractTests(unittest.TestCase):
         self.assertIn("INVOCATION_NOT_FOUND", troubleshooting)
         self.assertIn("pair_ready=true", troubleshooting)
 
+    def test_cua_fast_path_uses_one_job_async_authorization_and_policy_bounded_network(self):
+        script = (ROOT / "scripts" / "sync-my-cua.py").read_text(encoding="utf-8")
+        self.assertIn('"pair-auto", "--keep-session"', script)
+        self.assertIn('"create_sync_job"', script)
+        self.assertIn('"authorize-begin"', script)
+        self.assertIn('"network-ensure"', script)
+        self.assertIn('"authorize-watch"', script)
+        self.assertIn('"job", "wait", job_id', script)
+        self.assertNotIn("browser sync --all", script)
+        self.assertNotIn("pairing_code", script)
+        self.assertNotIn("cookie", script.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
