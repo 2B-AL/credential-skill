@@ -97,6 +97,76 @@ class SyncMyCuaTests(unittest.TestCase):
         self.assertIn("session-1", cleanup[0])
         self.assertTrue(process.stopped)
 
+    def test_authoritative_job_success_wins_over_advisory_assist_failures(self):
+        commands = []
+        process = FakeProcess()
+        events = queue.Queue()
+        events.put('{"type":"phase","phase":"create_sync_job","status":"succeeded","details":{"job":{"id":"job-1"}}}\n')
+
+        def run_json(command, _timeout, _code):
+            commands.append(command)
+            if command[0] == "/agent" and command[1:3] == ["browser", "validate"]:
+                return {"status": "succeeded"}
+            if "pair-auto" in command:
+                return {"data": {"device_id": "device-1", "session_id": "session-1", "browser_connected": True}}
+            if "authorize-begin" in command:
+                raise sync_my_cua.WorkflowError("CONNECTOR_BUSY", "authorization assist unavailable")
+            return {"ok": True}
+
+        args = argparse.Namespace(agent_path="/agent", cua_cli="/cua.py", site=["github"], timeout_seconds=120)
+        with mock.patch.object(sync_my_cua, "safe_executable", side_effect=lambda value, *_args, **_kwargs: Path(value)), \
+                mock.patch.object(sync_my_cua, "run_json", side_effect=run_json), \
+                mock.patch.object(
+                    sync_my_cua,
+                    "ensure_target_network",
+                    side_effect=sync_my_cua.WorkflowError(
+                        "CONNECTOR_ACTION_FAILED",
+                        "credential_browser_fallback_proxy_unavailable",
+                    ),
+                ), \
+                mock.patch.object(sync_my_cua, "start_jsonl", return_value=(process, events)), \
+                mock.patch.object(sync_my_cua, "wait_jsonl_result", return_value={"status": "succeeded"}), \
+                mock.patch.object(sync_my_cua, "emit"):
+            result = sync_my_cua.run(args)
+
+        self.assertEqual(result["status"], "succeeded")
+        self.assertEqual(result["job_id"], "job-1")
+        self.assertEqual(
+            [warning["code"] for warning in result["warnings"]],
+            ["TARGET_AUTHORIZATION_ASSIST_UNAVAILABLE", "TARGET_NETWORK_ASSIST_UNAVAILABLE"],
+        )
+        cleanup = [command for command in commands if "sessions" in command and "delete" in command]
+        self.assertEqual(len(cleanup), 1)
+        self.assertTrue(process.stopped)
+
+    def test_structured_unreachable_network_is_advisory(self):
+        response = {
+            "data": {
+                "network": {
+                    "status": "unreachable",
+                    "mode": "direct",
+                    "fallback_configured": False,
+                }
+            }
+        }
+        with mock.patch.object(sync_my_cua, "ensure_target_network", return_value=response), \
+                mock.patch.object(sync_my_cua, "emit") as emit:
+            network, warning = sync_my_cua.observe_target_network(
+                Path("/cua.py"),
+                "session-1",
+                ["github"],
+                time.monotonic() + 10,
+            )
+
+        self.assertEqual(network["status"], "unreachable")
+        self.assertEqual(warning, {
+            "phase": "target_network",
+            "code": "TARGET_NETWORK_UNREACHABLE",
+            "fallback_configured": False,
+            "mode": "direct",
+        })
+        self.assertEqual(emit.call_args.args[0]["status"], "degraded")
+
 
 if __name__ == "__main__":
     unittest.main()

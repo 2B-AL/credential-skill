@@ -233,6 +233,58 @@ def ensure_target_network(cua_cli: Path, session_id: str, sites: list[str], dead
             time.sleep(min(0.5, remaining))
 
 
+def advisory_warning(phase: str, code: str, **details) -> dict:
+    warning = {"phase": phase, "code": code}
+    warning.update({key: value for key, value in details.items() if value is not None})
+    emit({
+        "schema_version": 1,
+        "type": "phase",
+        "phase": phase,
+        "status": "degraded",
+        "error_code": code,
+    })
+    return warning
+
+
+def observe_target_network(
+    cua_cli: Path,
+    session_id: str,
+    sites: list[str],
+    deadline: float,
+) -> tuple[dict | None, dict | None]:
+    # Network assist must leave time for the source process and authoritative
+    # Job waiter. It may accelerate recovery, but it never owns Job outcome.
+    assist_deadline = min(deadline, time.monotonic() + 95)
+    try:
+        response = ensure_target_network(cua_cli, session_id, sites, assist_deadline)
+    except WorkflowError as exc:
+        return None, advisory_warning(
+            "target_network",
+            "TARGET_NETWORK_ASSIST_UNAVAILABLE",
+            upstream_code=exc.code,
+        )
+    data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    network = data.get("network") if isinstance(data.get("network"), dict) else data
+    status = str(network.get("status") or "").strip()
+    if status == "reachable":
+        emit({
+            "schema_version": 1,
+            "type": "phase",
+            "phase": "target_network",
+            "status": "succeeded",
+            "mode": network.get("mode"),
+        })
+        return network, None
+    if status == "unreachable":
+        return network, advisory_warning(
+            "target_network",
+            "TARGET_NETWORK_UNREACHABLE",
+            fallback_configured=network.get("fallback_configured") is True,
+            mode=network.get("mode"),
+        )
+    return network, advisory_warning("target_network", "TARGET_NETWORK_RESULT_INVALID")
+
+
 def run(args: argparse.Namespace) -> dict:
     started = time.monotonic()
     agent = safe_executable(args.agent_path, "credential-agent")
@@ -269,6 +321,7 @@ def run(args: argparse.Namespace) -> dict:
         ])
         job_id = ""
         source_result = None
+        warnings: list[dict] = []
         try:
             while True:
                 event = read_event(source_events, deadline)
@@ -283,51 +336,78 @@ def run(args: argparse.Namespace) -> dict:
                 source_result = wait_jsonl_result(source, source_events, deadline, allow_failure_result=True)
                 raise WorkflowError("SYNC_JOB_MISSING", "Source Agent did not create an authoritative Sync Job.")
 
-            authorization = run_json(
-                cua_command(
-                    cua_cli,
-                    "credential-browser",
-                    "authorize-begin",
-                    *sites,
-                    "--session-id",
-                    session_id,
-                    "--timeout-seconds",
-                    "30",
-                ),
-                35,
-                "TARGET_AUTHORIZATION_FAILED",
-            )
-            authorization_data = authorization.get("data") if isinstance(authorization.get("data"), dict) else {}
-            operation = authorization_data.get("operation") if isinstance(authorization_data.get("operation"), dict) else {}
-            operation_id = str(operation.get("operation_id") or "").strip()
-            if not operation_id:
-                raise WorkflowError("TARGET_AUTHORIZATION_FAILED", "CUA did not return an authorization operation id.")
+            operation_id = ""
+            try:
+                authorization = run_json(
+                    cua_command(
+                        cua_cli,
+                        "credential-browser",
+                        "authorize-begin",
+                        *sites,
+                        "--session-id",
+                        session_id,
+                        "--timeout-seconds",
+                        "30",
+                    ),
+                    min(35, max(2, int(deadline - time.monotonic()))),
+                    "TARGET_AUTHORIZATION_FAILED",
+                )
+                authorization_data = authorization.get("data") if isinstance(authorization.get("data"), dict) else {}
+                operation = authorization_data.get("operation") if isinstance(authorization_data.get("operation"), dict) else {}
+                operation_id = str(operation.get("operation_id") or "").strip()
+                if not operation_id:
+                    raise WorkflowError(
+                        "TARGET_AUTHORIZATION_FAILED",
+                        "CUA did not return an authorization operation id.",
+                    )
+            except WorkflowError as exc:
+                warnings.append(advisory_warning(
+                    "target_authorize",
+                    "TARGET_AUTHORIZATION_ASSIST_UNAVAILABLE",
+                    upstream_code=exc.code,
+                ))
 
-            network = ensure_target_network(cua_cli, session_id, sites, deadline)
-            network_data = network.get("data") if isinstance(network.get("data"), dict) else {}
-            emit({
-                "schema_version": 1,
-                "type": "phase",
-                "phase": "target_network",
-                "status": "succeeded",
-                "mode": (network_data.get("network") or {}).get("mode"),
-            })
-
-            run_json(
-                cua_command(
-                    cua_cli,
-                    "credential-browser",
-                    "authorize-watch",
-                    operation_id,
-                    "--timeout-seconds",
-                    str(max(1, int(deadline - time.monotonic()))),
-                    "--poll-interval-ms",
-                    "500",
-                ),
-                max(2, int(deadline - time.monotonic()) + 1),
-                "TARGET_AUTHORIZATION_FAILED",
+            _network, network_warning = observe_target_network(
+                cua_cli,
+                session_id,
+                sites,
+                deadline,
             )
-            emit({"schema_version": 1, "type": "phase", "phase": "target_authorize", "status": "succeeded"})
+            if network_warning:
+                warnings.append(network_warning)
+
+            if operation_id:
+                authorization_observation_seconds = max(
+                    1,
+                    min(90, int(deadline - time.monotonic()) - 2),
+                )
+                try:
+                    run_json(
+                        cua_command(
+                            cua_cli,
+                            "credential-browser",
+                            "authorize-watch",
+                            operation_id,
+                            "--timeout-seconds",
+                            str(authorization_observation_seconds),
+                            "--poll-interval-ms",
+                            "500",
+                        ),
+                        authorization_observation_seconds + 2,
+                        "TARGET_AUTHORIZATION_FAILED",
+                    )
+                    emit({
+                        "schema_version": 1,
+                        "type": "phase",
+                        "phase": "target_authorize",
+                        "status": "succeeded",
+                    })
+                except WorkflowError as exc:
+                    warnings.append(advisory_warning(
+                        "target_authorize",
+                        "TARGET_AUTHORIZATION_OBSERVATION_INCOMPLETE",
+                        upstream_code=exc.code,
+                    ))
             source_result = wait_jsonl_result(source, source_events, deadline, allow_failure_result=True)
         finally:
             stop_process(source)
@@ -343,6 +423,7 @@ def run(args: argparse.Namespace) -> dict:
                 job_id=job_id,
                 status=str(job.get("status") or "pending_target"),
                 target_health=target_health(cua_cli, session_id),
+                warnings=warnings,
             )
         if source_result.get("status") != "succeeded":
             raise WorkflowError(
@@ -351,9 +432,10 @@ def run(args: argparse.Namespace) -> dict:
                 job_id=job_id,
                 status=source_result.get("status"),
                 target_health=target_health(cua_cli, session_id),
+                warnings=warnings,
             )
 
-        return {
+        result = {
             "schema_version": 1,
             "status": "succeeded",
             "device_id": device_id,
@@ -361,6 +443,9 @@ def run(args: argparse.Namespace) -> dict:
             "sites": sites,
             "duration_ms": int((time.monotonic() - started) * 1000),
         }
+        if warnings:
+            result["warnings"] = warnings
+        return result
     finally:
         active_error = sys.exc_info()[0] is not None
         try:
