@@ -63,6 +63,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 
 - Inspect `browser status --output json` and its `distribution_mode` before reopening anything. Do not infer the repair path from Windows/Linux alone.
 - In generic `unpacked` mode, Chrome opens but not `chrome://extensions/`: rerun the Agent open-install step, then use the safe browser-assist script and visible UI.
+- On generic macOS, prefer `browser install-auto` when advertised. `ACCESSIBILITY_PERMISSION_REQUIRED` needs a one-time System Settings grant; `BROWSER_UI_CHANGED` is a fail-closed Chrome accessibility-tree mismatch and must not trigger coordinate clicks or Profile editing.
 - In my-cua `unpacked` mode, run the Connector's `credential-browser ensure`; do not duplicate it with `open-install`, screenshot-driven UI automation, or extension-page UIA. CDP owns Chrome controls and UIA is limited to the native folder picker.
 - After a my-cua E2E test, `credential-agent reset-e2e` must return `pair_ready=true`. A missing device assertion must fail before any browser mutation. A failed Guest artifact push or Broker build-key mismatch is a deployment failure, not advisory readiness; rerun `dev-env api-start` and do not start pairing until the Connector probe succeeds.
 - In either managed mode, never open developer mode or load a directory. An absent or stale extension is a Chrome Policy, Store publication, release identity, or signed-artifact error.
@@ -75,6 +76,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 - Site reports unauthenticated: ensure the source browser is actually logged in and the extension version/permissions are current. Do not expand cookie allowlists from the Skill.
 - `prepare_browser` is slow: inspect JSONL `details.policies`. If `updated` is nonzero, Agent is applying stale/missing policy digests; if every checked policy is `already_current`, a compatible Agent should skip policy writes and the 30-second digest wait.
 - `SITE_PERMISSION_REQUIRED`: Agent opened the extension options page, but Chrome still requires a visible user gesture for the exact origins. Complete that gesture; `--yes` does not bypass browser permission prompts.
+- On macOS, a disconnected or older extension may use the fixed-ID Accessibility removal fallback; it first proves the extensions page tree is available and never edits the Profile. `BROWSER_UI_CHANGED` remains fail-closed. Other platforms returning `BROWSER_VISIBLE_UNINSTALL_UNSUPPORTED` require their environment owner to remove the fixed extension before the same `uninstall --yes` retry. A `partial` uninstall after central revocation must be resumed with the same command.
 
 ## Sync and delivery
 

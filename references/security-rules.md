@@ -48,6 +48,8 @@ Before revoke or cleanup, state whether the action affects central snapshots, fu
 
 Use `credential-agent device unenroll` for current-personal-device cleanup only when the installed Agent advertises it. Never manually remove Agent state or OS-keystore entries. Require central revocation before local identity deletion, and treat a partial result as still requiring local repair. Device-only or externally supervised targets must be revoked by exact Device ID from a personal computer and reset by their environment owner.
 
+For an explicitly requested never-installed state on the current personal computer, use `credential-agent uninstall --yes` only when `capabilities.lifecycle.features` advertises `uninstall`. It preserves Chrome Profile/Cookies and external restored files while removing only the fixed extension, Native Messaging, platform daemon, Agent-owned state/cache, and standard-path binary. Require central revocation first when device state exists, accept only the structured final success fields, and resume a partial result with the same command. Never imitate it with manual Keychain, profile, Secure Preferences, or state-directory deletion.
+
 For my-cua repeated E2E reset, use only its authenticated `reset-e2e` operator action after exact central revocation. The operator token must live in private regular files on both ends, never in Skill config JSON, arguments, logs, or chat. A reset is complete only when the Connector re-probes `setup_required` with no enrollment, extension heartbeat, Native Messaging registration, or unpacked install evidence.
 
 ## Logs

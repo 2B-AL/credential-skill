@@ -1,6 +1,6 @@
 ---
 name: al-credential-sync
-description: Install, update, configure, diagnose, pair, and operate the AL credential-agent and Chrome or Linux Chromium credential extension across personal computers, Linux sandboxes, and Windows cloud desktops. Use when Codex needs to initialize AL credential sync, complete OAuth or device pairing, prepare or repair the Chrome or Chromium extension and Native Messaging host, sync or revoke secrets, named environment variables, credential sets such as AK/SK, sensitive configuration files, browser sessions, dynamic credentials, or managed keys, inspect device or sync health, or recover an expired or unhealthy AL credential device.
+description: Install, update, configure, diagnose, pair, uninstall, and operate the AL credential-agent and Chrome or Linux Chromium credential extension across personal computers, Linux sandboxes, and Windows cloud desktops. Use when Codex needs to initialize or fully remove AL credential sync, complete OAuth or device pairing, prepare or repair the Chrome or Chromium extension and Native Messaging host, sync or revoke secrets, named environment variables, credential sets such as AK/SK, sensitive configuration files, browser sessions, dynamic credentials, or managed keys, inspect device or sync health, or recover an expired or unhealthy AL credential device.
 ---
 
 # AL Credential Sync
@@ -16,7 +16,7 @@ Resolve the absolute directory containing this `SKILL.md` before invoking bundle
    - macOS/Linux: `sh <skill-directory>/scripts/inspect-host.sh`
    - Windows: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <absolute-skill-directory>\scripts\inspect-host.ps1`
 3. Locate the Agent from the returned JSON. Never assume it is on `PATH`.
-4. If the Agent supports it, run its absolute path with `capabilities --output json` once and retain the result for this task. Use `runtime.kind`, `enrollment`, `daemon.manager`, `daemon.healthy`, `browser.features`, and `jobs.features` as the orchestration contract. On Linux, both Agent and host inspection may obtain this contract from the root-owned `/run/credential-agent/runtime.json`; do not require inherited shell environment. On an older Agent, feature-detect commands from `help`; do not infer runtime type from virtualization or parse localized output.
+4. If the Agent supports it, run its absolute path with `capabilities --output json` once and retain the result for this task. Use `runtime.kind`, `enrollment`, `daemon.manager`, `daemon.healthy`, `browser.features`, `lifecycle.features`, and `jobs.features` as the orchestration contract. On Linux, both Agent and host inspection may obtain this contract from the root-owned `/run/credential-agent/runtime.json`; do not require inherited shell environment. On an older Agent, feature-detect commands from `help`; do not infer runtime type from virtualization or parse localized output.
 5. Classify the request as setup, browser repair, sync, revoke/cleanup, status, or diagnosis.
 6. Read only the relevant reference:
    - Setup or browser work: [browser-installation.md](references/browser-installation.md)
@@ -69,6 +69,7 @@ For an Agent exposing the staged browser commands, prefer this state-driven sequ
 ```text
 credential-agent browser prepare [--user-data-dir DIR ...] --output json
 credential-agent browser status --output json
+credential-agent browser install-auto --timeout 2m --output json # macOS when visible-auto-install is advertised
 credential-agent browser open-install --output json       # only when disconnected/version-mismatched
 credential-agent browser wait --for connected --timeout 10m --output json
 credential-agent browser configure-policies --output json
@@ -104,6 +105,8 @@ Do not delegate a CUA model task to install the extension. The command is an ide
 If it returns `ready=true, connected=false`, continue device pairing and rerun the check afterward; this is installation readiness only and must not be reported as `browser_ready`.
 
 `prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides which UI action is actually needed. Do not reopen installation or permissions pages when the corresponding state is already ready.
+
+On a generic macOS endpoint whose `browser.features` contains `visible-auto-install`, prefer `browser install-auto` after `prepare`. It drives only visible Accessibility semantic controls, passes only the exact Agent-managed directory, and requires the fixed ID/build heartbeat before success. If it returns `ACCESSIBILITY_PERMISSION_REQUIRED`, ask for the one-time macOS Accessibility grant and retry the same command; do not use raw CDP, coordinates, screenshots, Profile edits, or Cookie APIs. Linux keeps the generic visible workflow, while my-cua keeps its Connector-owned CDP/UIA workflow.
 
 `open-install` and `open-permissions` report only that Chrome accepted an open request. Confirm the visible internal URL through the browser-control channel already provided for the target, and navigate explicitly when Chrome ignores the launch request.
 
@@ -217,6 +220,14 @@ credential-agent device unenroll --yes --reason "reset for end-to-end test" --ou
 ```
 
 Accept completion only when the result is `succeeded` with `central_revoked=true` and `local_state_cleared=true`. If it returns `partial`, the center has already revoked the Device but local cleanup is incomplete; fix the reported daemon or cleanup failure and rerun the same `device unenroll` command, which confirms the authoritative revoked state before continuing. Do not run `setup` first. A central revoke failure that cannot confirm `revoked` intentionally preserves all local state. If an older Agent lacks this command, update it or revoke the current Device from another signed-in personal computer; do not imitate unenrollment by removing files.
+
+When the user explicitly wants the current personal computer returned to a never-installed Agent state, prefer the separate `lifecycle.features=uninstall` path rather than `device unenroll`:
+
+```text
+credential-agent uninstall --yes --output json
+```
+
+State the effects before running it: the current Device is centrally revoked first; the fixed-ID extension self-uninstalls through the trusted local lifecycle channel, with a macOS fixed-ID Accessibility fallback only when the extension is absent, disconnected, or too old; Native Messaging, the platform daemon, Agent-owned caches, and the standard-path binary are removed. Chrome Profile, Cookie/login state, external restored files, central Secrets/Snapshots, and site consent are preserved. Accept only final `succeeded` with `central_revoked=true` when a device existed, plus `extension_removed=true`, `native_host_removed=true`, `local_state_cleared=true`, and `agent_binary_removed=true`. A `partial` result must be resumed with the same command; never replace it with state-file, Keychain, Chrome Profile, or Secure Preferences deletion.
 
 Do not run self-unenrollment on a device-only cloud endpoint. Revoke that target's exact recorded Device ID from a signed-in personal computer, then use the target Connector or environment lifecycle to reset its local overlay/state. An `external` daemon manager is owned by its Supervisor and must be stopped/reset by that owner. For repeated CUA tests, keep the source personal computer enrolled unless the test explicitly covers source enrollment; normally reset only the exact CUA Device ID and the CUA overlay.
 

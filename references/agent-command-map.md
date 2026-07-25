@@ -29,6 +29,7 @@ credential-agent pair --deny --output json PAIR-CODE
 credential-agent status
 credential-agent doctor --strict
 credential-agent device unenroll --yes --reason "reset for end-to-end test" --output json
+credential-agent uninstall --yes --output json
 credential-agent pull
 credential-agent job status JOB_ID --output json
 credential-agent job wait JOB_ID --timeout 5m --output jsonl
@@ -45,6 +46,8 @@ On Linux, a platform image may publish the same non-sensitive contract at `/run/
 Do not derive this choice from OS alone. In particular, Windows cloud computers continue to use their reported platform manager; AIO sandbox images report `runtime.kind=aio_sandbox` and `daemon.manager=external`.
 
 `device unenroll` is a current-personal-device operation, advertised as `capabilities.enrollment.features=unenroll-self`. It centrally revokes the current Device before stopping the platform daemon and clearing local User Auth, device identity/keys, and Secret Cache. Treat `central_revoked=true, local_state_cleared=false` as a partial result that requires local repair before setup. It deliberately preserves browser profile data, browser integration artifacts, restored files, central resources/snapshots, and the Agent binary. Never use it on a device-only cloud endpoint or an externally supervised Agent; revoke the exact cloud Device ID from a personal computer and reset that environment through its Connector instead.
+
+`uninstall` is the stronger current-personal-device lifecycle operation, advertised as `capabilities.lifecycle.features=uninstall`. Use it only for an explicit never-installed reset. It centrally revokes first, asks the fixed-ID extension to self-uninstall over a separate local lifecycle protocol, removes Native Messaging/platform daemon/Agent-owned caches/standard-path binary, and preserves Chrome Profile/Cookies, external restored files, and central Secrets/Snapshots. A partial result is resumable; do not manually delete state.
 
 Use phased setup whenever capabilities/help advertises it so the pairing code is returned by a fast foreground command and never retained by a generic background task. This applies to current Windows cloud Agents as well as AIO; use the regular interactive setup path only on older Agents.
 

@@ -28,6 +28,7 @@ Current Agents expose a staged, machine-readable workflow:
 ```text
 credential-agent browser prepare [--user-data-dir DIR ...] --output json
 credential-agent browser status --output json
+credential-agent browser install-auto --timeout 2m --output json
 credential-agent browser open-install --output json
 credential-agent browser wait --for connected --timeout 10m --output json
 credential-agent browser configure-policies --output json
@@ -63,7 +64,7 @@ Both forms install Native Messaging, download and verify the signed extension ar
 
 1. Run the distribution-appropriate `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. For my-cua unpacked mode, the Connector owns this invocation and validates the exact returned directory and fixed Extension ID. For `managed_store`, the platform must add exact Store ID/build/manifest flags. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
 2. Run `browser status --output json`. Require connected runtime ID/build/manifest to match expected values.
-3. In unpacked mode only, run `open-install` when disconnected or stale and repair the exact Agent-managed directory. In managed modes, installation or update failure is a policy/release error; do not open developer mode.
+3. In unpacked mode only, a generic macOS endpoint advertising `visible-auto-install` should run `install-auto` when disconnected or stale. It uses visible Accessibility semantics and the exact Agent-managed directory, then requires the fixed identity heartbeat. Other generic endpoints run `open-install` and use their visible browser channel. In managed modes, installation or update failure is a policy/release error; do not open developer mode.
 4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first target Sync Job will deliver the exact policy through a metadata-only preparation task before Restore.
 5. Inspect `browser status` again. If every reported supported site is authorized, skip permission UI. Otherwise run `open-permissions`, approve exact origins, and yield on `wait --for permissions`.
 6. Continue to `doctor --strict --output json` and require Agent-observed state; do not infer success from an extension card or dialog alone.
@@ -81,6 +82,8 @@ Do not require staged commands on older releases and do not update a healthy Age
 ## Visible UI assistance
 
 Use browser or computer control only on an unlocked visible desktop.
+
+On generic macOS, `browser install-auto` is the preferred visible helper when advertised. The first invocation may return `ACCESSIBILITY_PERMISSION_REQUIRED`; ask the user to grant that one OS permission and retry. Agent records whether this helper enabled Developer mode and restores that toggle only when the later full uninstall owns it. The command must fail closed if Chrome's semantic controls changed, and must never fall back to coordinates, screenshots, raw CDP, Profile edits, or Cookie APIs. The manual labels below remain the fallback for older Agents and Linux. This macOS helper does not replace the my-cua Connector path.
 
 Semantic labels:
 
