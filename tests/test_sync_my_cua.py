@@ -8,7 +8,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parent.parent
-SPEC = importlib.util.spec_from_file_location("sync_my_cua", ROOT / "scripts" / "sync-my-cua.py")
+SPEC = importlib.util.spec_from_file_location("sync_my_cua", ROOT / "scripts" / "sync-cua.py")
 sync_my_cua = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(sync_my_cua)
@@ -53,8 +53,8 @@ class SyncMyCuaTests(unittest.TestCase):
                 "secret": "must not escape",
             }
         }
-        with mock.patch.object(sync_my_cua, "run_json", return_value=response):
-            health = sync_my_cua.target_health(Path("/cua.py"), "session-1")
+        with mock.patch.object(sync_my_cua, "run_adapter_json", return_value=response):
+            health = sync_my_cua.target_health(Path("/cua.py"), "workflow-1")
         self.assertEqual(health, {
             "available": True,
             "healthy": True,
@@ -64,7 +64,7 @@ class SyncMyCuaTests(unittest.TestCase):
             "issue_count": 2,
         })
 
-    def test_failed_workflow_still_deletes_exact_pair_session(self):
+    def test_failed_workflow_still_finishes_exact_target_workflow(self):
         commands = []
         process = FakeProcess()
         events = queue.Queue()
@@ -74,17 +74,27 @@ class SyncMyCuaTests(unittest.TestCase):
             commands.append(command)
             if command[0] == "/agent" and command[1:3] == ["browser", "validate"]:
                 return {"status": "succeeded"}
-            if "pair-auto" in command:
-                return {"data": {"device_id": "device-1", "session_id": "session-1", "browser_connected": True}}
-            if "authorize-begin" in command:
-                return {"data": {"operation": {"operation_id": "operation-1"}}}
+            return {"status": "succeeded"}
+
+        def run_adapter(command, _timeout, _code):
+            commands.append(command)
+            if "capabilities" in command:
+                return {"data": {"transport": "direct_dev", "features": [
+                    "pair-relay-v1", "browser-unpacked-ensure", "browser-authorize-v1",
+                    "browser-network-ensure-v1", "health-v1",
+                ]}}
+            if "begin" in command:
+                return {"data": {"device_id": "device-1", "workflow_id": "workflow-1", "browser_extension_ready": True, "browser_connected": True}}
+            if "browser-authorize-begin" in command:
+                return {"data": {"operation_id": "operation-1"}}
             if "health" in command:
                 return {"data": {"healthy": False}}
-            return {"ok": True}
+            return {"data": {"finished": True}}
 
-        args = argparse.Namespace(agent_path="/agent", cua_cli="/cua.py", site=["github"], timeout_seconds=120)
+        args = argparse.Namespace(agent_path="/agent", target_adapter="/cua.py", desktop_id=None, site=["github"], timeout_seconds=120)
         with mock.patch.object(sync_my_cua, "safe_executable", side_effect=lambda value, *_args, **_kwargs: Path(value)), \
                 mock.patch.object(sync_my_cua, "run_json", side_effect=run_json), \
+                mock.patch.object(sync_my_cua, "run_adapter_json", side_effect=run_adapter), \
                 mock.patch.object(sync_my_cua, "ensure_target_network", return_value={"data": {"network": {"mode": "direct"}}}), \
                 mock.patch.object(sync_my_cua, "start_jsonl", return_value=(process, events)), \
                 mock.patch.object(sync_my_cua, "wait_jsonl_result", return_value={"status": "failed"}), \
@@ -92,9 +102,9 @@ class SyncMyCuaTests(unittest.TestCase):
             with self.assertRaises(sync_my_cua.WorkflowError):
                 sync_my_cua.run(args)
 
-        cleanup = [command for command in commands if "sessions" in command and "delete" in command]
+        cleanup = [command for command in commands if "finish" in command]
         self.assertEqual(len(cleanup), 1)
-        self.assertIn("session-1", cleanup[0])
+        self.assertIn("workflow-1", cleanup[0])
         self.assertTrue(process.stopped)
 
     def test_authoritative_job_success_wins_over_advisory_assist_failures(self):
@@ -107,15 +117,25 @@ class SyncMyCuaTests(unittest.TestCase):
             commands.append(command)
             if command[0] == "/agent" and command[1:3] == ["browser", "validate"]:
                 return {"status": "succeeded"}
-            if "pair-auto" in command:
-                return {"data": {"device_id": "device-1", "session_id": "session-1", "browser_connected": True}}
-            if "authorize-begin" in command:
-                raise sync_my_cua.WorkflowError("CONNECTOR_BUSY", "authorization assist unavailable")
-            return {"ok": True}
+            return {"status": "succeeded"}
 
-        args = argparse.Namespace(agent_path="/agent", cua_cli="/cua.py", site=["github"], timeout_seconds=120)
+        def run_adapter(command, _timeout, _code):
+            commands.append(command)
+            if "capabilities" in command:
+                return {"data": {"transport": "direct_dev", "features": [
+                    "pair-relay-v1", "browser-unpacked-ensure", "browser-authorize-v1",
+                    "browser-network-ensure-v1", "health-v1",
+                ]}}
+            if "begin" in command:
+                return {"data": {"device_id": "device-1", "workflow_id": "workflow-1", "browser_extension_ready": True, "browser_connected": True}}
+            if "browser-authorize-begin" in command:
+                raise sync_my_cua.WorkflowError("CONNECTOR_BUSY", "authorization assist unavailable")
+            return {"data": {"finished": True}}
+
+        args = argparse.Namespace(agent_path="/agent", target_adapter="/cua.py", desktop_id=None, site=["github"], timeout_seconds=120)
         with mock.patch.object(sync_my_cua, "safe_executable", side_effect=lambda value, *_args, **_kwargs: Path(value)), \
                 mock.patch.object(sync_my_cua, "run_json", side_effect=run_json), \
+                mock.patch.object(sync_my_cua, "run_adapter_json", side_effect=run_adapter), \
                 mock.patch.object(
                     sync_my_cua,
                     "ensure_target_network",
@@ -135,7 +155,7 @@ class SyncMyCuaTests(unittest.TestCase):
             [warning["code"] for warning in result["warnings"]],
             ["TARGET_AUTHORIZATION_ASSIST_UNAVAILABLE", "TARGET_NETWORK_ASSIST_UNAVAILABLE"],
         )
-        cleanup = [command for command in commands if "sessions" in command and "delete" in command]
+        cleanup = [command for command in commands if "finish" in command]
         self.assertEqual(len(cleanup), 1)
         self.assertTrue(process.stopped)
 

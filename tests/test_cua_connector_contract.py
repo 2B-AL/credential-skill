@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class CuaConnectorContractTests(unittest.TestCase):
     def test_skill_routes_development_my_cua_through_connector(self):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("credential-browser ensure", skill)
+        self.assertIn("credential-target begin", skill)
         self.assertIn("authenticated CDP", skill)
         self.assertIn("UIA only for the Chrome-owned native folder picker", skill)
         self.assertIn("generic Linux/macOS unpacked workflow", skill)
@@ -40,8 +40,8 @@ class CuaConnectorContractTests(unittest.TestCase):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         security = (ROOT / "references" / "security-rules.md").read_text(encoding="utf-8")
         troubleshooting = (ROOT / "references" / "troubleshooting.md").read_text(encoding="utf-8")
-        self.assertIn("credential-agent pair-auto", skill)
-        self.assertIn("credential-agent reset-e2e", skill)
+        self.assertIn("credential-target begin", skill)
+        self.assertIn("credential-target reset", skill)
         self.assertIn("Linux sandbox", skill)
         self.assertIn("one-time HPKE envelope", security)
         self.assertIn("private regular files", security)
@@ -49,12 +49,13 @@ class CuaConnectorContractTests(unittest.TestCase):
         self.assertIn("pair_ready=true", troubleshooting)
 
     def test_cua_fast_path_uses_one_job_async_authorization_and_policy_bounded_network(self):
-        script = (ROOT / "scripts" / "sync-my-cua.py").read_text(encoding="utf-8")
-        self.assertIn('"pair-auto", "--keep-session"', script)
+        script = (ROOT / "scripts" / "sync-cua.py").read_text(encoding="utf-8")
+        self.assertIn('"begin",', script)
+        self.assertIn('"--mode",', script)
         self.assertIn('"create_sync_job"', script)
-        self.assertIn('"authorize-begin"', script)
-        self.assertIn('"network-ensure"', script)
-        self.assertIn('"authorize-watch"', script)
+        self.assertIn('"browser-authorize-begin"', script)
+        self.assertIn('"browser-network-ensure"', script)
+        self.assertIn('"browser-authorize-watch"', script)
         self.assertIn('"job", "wait", job_id', script)
         self.assertIn("TARGET_NETWORK_ASSIST_UNAVAILABLE", script)
         self.assertIn("TARGET_NETWORK_UNREACHABLE", script)
@@ -62,6 +63,15 @@ class CuaConnectorContractTests(unittest.TestCase):
         self.assertNotIn("browser sync --all", script)
         self.assertNotIn("pairing_code", script)
         self.assertNotIn("cookie", script.lower())
+
+    def test_cua_target_adapter_contract_is_environment_neutral(self):
+        reference = (ROOT / "references" / "cua-target-adapter-v1.md").read_text(encoding="utf-8")
+        script = (ROOT / "scripts" / "sync-cua.py").read_text(encoding="utf-8")
+        self.assertIn("cua-target/v1", reference)
+        self.assertIn("transport=direct_dev", reference)
+        self.assertIn("transport=access_hub_gateway", reference)
+        self.assertIn('value.add_argument("--target-adapter", required=True)', script)
+        self.assertNotIn(".codex/skills/my-cua-dev", script)
 
 
 if __name__ == "__main__":

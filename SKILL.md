@@ -51,7 +51,7 @@ Do not re-enroll a device whose authorization is valid. Repeated setup should re
 
 ## Initialize a cloud or peer computer
 
-1. When the target is the configured development my-cua and the installed `my-cua-dev` Skill exposes `credential-agent pair-auto`, use `python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-agent pair-auto` after the user has explicitly authorized pairing/sync to that target. The target code must travel only inside the Agent-to-Agent one-time encrypted relay; it must not enter model context, terminal output, files, or API logs. This CUA adapter verifies the signed target Agent, binds relay begin/complete by operation ID, persists the Device ID only after target enrollment, then loads and connects the unpacked extension. If target enrollment is already valid, the same command resumes browser setup for the exact enrolled Device ID instead of starting another pairing.
+1. When the caller explicitly supplies a compatible CUA Target Adapter, use `credential-target begin --mode device` or `--mode browser` after the user has authorized the exact target and resource scope. Follow [cua-target-adapter-v1.md](references/cua-target-adapter-v1.md). The target code travels only inside the Agent-to-Agent one-time encrypted relay; it must not enter model context, terminal output, files, or API logs. The Adapter verifies the signed target Agent, binds relay begin/complete by operation ID, persists the Device ID only after target enrollment, and prepares the extension only in browser mode. Never auto-discover or fall back between a development and production Adapter.
 2. For every other target, when capabilities/help advertises phased cloud setup, use foreground `setup --role cloud --skip-browser [--daemon-manager MANAGER] --pair-phase begin --output json`, approve its short-lived pairing code, then run the matching `--pair-phase complete --pair-timeout 2m --output json`. Use the capability-reported daemon manager on every OS; append `external` only when reported. Never put either call in a generic background task.
 3. On an older Agent without phased setup, run `credential-agent setup --role cloud --skip-browser` interactively and use its reported daemon manager.
 4. If a separate, already logged-in personal-computer execution channel is available, show the pending device to the user. After explicit approval, prefer its absolute Agent path with `credential-agent pair --approve --output json CODE`; use interactive `credential-agent pair CODE` only for an older Agent without these flags.
@@ -85,21 +85,38 @@ Choose the preparation branch from `capabilities.browser.distribution_mode` or t
 
 When a target has a Credential Agent Connector, let that Connector own `prepare`, Browser Owner launch, installation/reload, and version readiness. In my-cua unpacked mode, do not separately run `open-install` or start screenshot-driven UI automation: the Connector uses authenticated CDP for `chrome://extensions/` and UIA only for the Chrome-owned native folder picker. Use the target control channel only for the exact permission handoff it reports. This keeps the Skill generic for Linux sandboxes and other endpoints.
 
-For the configured development my-cua, invoke the local `$my-cua-dev` script before target restore:
+For any CUA, the caller must explicitly supply the environment's Adapter and first inspect its capabilities:
 
 ```text
-python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-agent pair-auto  # only when unpaired
-python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser ensure  # idempotent repair/check
+python3 /absolute/path/cua.py credential-target capabilities [--desktop-id ID]
+python3 /absolute/path/cua.py credential-target begin --mode browser --agent-path /absolute/path/to/credential-agent [--desktop-id ID]
 ```
 
-For an explicitly approved exact-site transfer to that development CUA, prefer the bundled composite adapter instead of manually sequencing separate tasks:
+For an explicitly approved exact-site transfer, use the single environment-neutral composite and the same explicit Adapter path:
 
 ```text
-python3 <skill-directory>/scripts/sync-my-cua.py \
-  --agent-path /absolute/path/to/credential-agent SITE...
+python3 <skill-directory>/scripts/sync-cua.py \
+  --agent-path /absolute/path/to/credential-agent \
+  --target-adapter /absolute/path/cua.py \
+  [--desktop-id ID] SITE...
 ```
 
-Treat this adapter as the single entry point from either an unpaired baseline or an already-ready target. Do not run a separate `pair-auto` or `credential-browser ensure` first: the adapter's `pair-auto --keep-session` performs the idempotent Connector preparation once and returns the exact workflow session it reuses. It consumes the source Agent JSONL until the single Sync Job exists, starts asynchronous exact-site authorization, runs the policy-bounded target network check/fallback, watches the same authorization operation, and waits for the same Job. Once that Job ID exists, it is the sole completion authority: a network helper or authorization observer failure becomes a bounded warning and cannot terminate the source process or override a later successful Job. Every exit path deletes that exact temporary session. A bounded wait preserves `pending_target` plus direct structured target health instead of turning it into an ambiguous local timeout or a CUA model diagnosis. It never accepts a proxy address, pairing code, Cookie, or secret value. This is a conditional CUA adapter only; Linux sandboxes and generic macOS/Linux targets continue using the generic workflow below.
+The composite passes the same verified absolute Agent path into
+`credential-target begin` so automatic pair-relay approval remains bound to the
+signed personal Agent. The Adapter must not discover an Agent path on its own.
+
+For a non-browser CUA resource, use the separate device-only composite. It
+prepares enrollment without starting Chrome, invokes only the public Agent
+resource command, and always finishes the exact opaque workflow:
+
+```text
+python3 <skill-directory>/scripts/sync-cua-resource.py \
+  --agent-path /absolute/path/to/credential-agent \
+  --target-adapter /absolute/path/cua.py \
+  --desktop-id ID env OPENAI_API_KEY
+```
+
+Treat this composite as the single entry point from either an unpaired baseline or an already-ready target. Do not run a separate pair or browser ensure first: `credential-target begin` performs idempotent Connector preparation once and returns an opaque `workflow_id`. The composite consumes source Agent JSONL until the single Sync Job exists, starts asynchronous exact-site authorization, runs the policy-bounded target network helper, watches the same authorization operation, and waits for the same Job. Once that Job ID exists, it is the sole completion authority. Every exit path calls `credential-target finish` for that exact workflow; it never discovers or deletes arbitrary sessions. A bounded wait preserves `pending_target` plus structured target health. It never accepts a proxy address, pairing code, Cookie, Secret value, development URL, or operator token. Linux sandboxes and generic macOS/Linux targets continue using the generic workflow below.
 
 Do not delegate a CUA model task to install the extension. The command is an idempotent Connector operation and creates no model run. This conditional integration does not replace the generic Linux/macOS unpacked workflow.
 If it returns `ready=true, connected=false`, continue device pairing and rerun the check afterward; this is installation readiness only and must not be reported as `browser_ready`.
@@ -166,15 +183,14 @@ Treat JSONL as a stage protocol, not localized text: retain `operation_id`, read
 
 Keep the source sync process in a foreground/yielded session and consume JSONL incrementally. As soon as the `create_sync_job` phase succeeds, retain `details.job.id` and immediately inspect the target's own browser status and visible tabs through whatever execution/browser channel was provided for that target. Do this while the same source process continues waiting; do not wait for its fixed delivery window to expire first. If the target shows the exact policy-origin permission page, complete that visible user-gesture flow and let the original Job continue. This is upper-level orchestration and must not depend on a Sandbox Skill or assume the target is Linux.
 
-For my-cua, start `credential-browser authorize-begin SITE...` immediately after `create_sync_job`, then run `credential-browser network-ensure SITE...` and watch the returned operation with `authorize-watch`. The permission mutation is server-side and survives an HTTP client disconnect; a watch is read-only and must not replay `begin`. The network call uses only the dynamic policy's validation URL and a server-configured fallback proxy, never a caller-supplied proxy. A direct retry may recover a transient navigation failure. If no fallback is configured, `network-ensure` returns structured `unreachable`; the composite records a degraded warning and continues observing the same authoritative Job instead of failing or creating another Job.
+For a CUA Adapter, start `credential-target browser-authorize-begin` immediately after `create_sync_job`, then run `browser-network-ensure` and observe the returned operation with `browser-authorize-watch`. The permission mutation is server-side and survives an HTTP client disconnect; watch is read-only and must not replay begin. The network call uses only the dynamic policy's validation URL and an instance-side server-configured fallback proxy, never a caller-supplied proxy. If no fallback is configured, structured `unreachable` is advisory while the same authoritative Job continues.
 
 If the target reports `waiting_network` / `browser_network_unreachable`, leave the original Job active. After the Connector restores target reachability, the target Agent reports `resumed` and runs `VALIDATE_SITE` only. Do not repeat Restore, capture, Delivery Grant issuance, or `browser sync`.
 
-For a configured my-cua target, replace repeated cached status reads with its
-request-scoped exact-site adapter while the same source process remains active:
+For a CUA target, use the request-scoped Adapter operation while the same source process remains active:
 
 ```text
-python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser authorize SITE...
+python3 /absolute/path/cua.py credential-target browser-authorize-begin --workflow-id ID SITE...
 ```
 
 This my-cua-specific command is only an adapter around Connector probes and the
@@ -231,10 +247,10 @@ State the effects before running it: the current Device is centrally revoked fir
 
 Do not run self-unenrollment on a device-only cloud endpoint. Revoke that target's exact recorded Device ID from a signed-in personal computer, then use the target Connector or environment lifecycle to reset its local overlay/state. An `external` daemon manager is owned by its Supervisor and must be stopped/reset by that owner. For repeated CUA tests, keep the source personal computer enrolled unless the test explicitly covers source enrollment; normally reset only the exact CUA Device ID and the CUA overlay.
 
-For the configured development my-cua, use its atomic reset adapter after an explicit test-reset request:
+For a configured CUA, use its atomic Target Adapter only after an explicit reset request and exact central revocation:
 
 ```text
-python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-agent reset-e2e
+python3 /absolute/path/cua.py credential-target reset --desktop-id ID --device-id ID
 ```
 
 It first revokes the exact device ID through the signed-in personal Agent, persists only the non-secret revocation checkpoint for safe retry, then asks the trusted Connector to clear restored browser state, remove only the fixed unpacked extension, disable Developer mode, remove Native Messaging, stop/uninstall the target daemon, and clear Agent-owned local identity. Accept only `pair_ready=true`; do not replace it with manual state-file deletion or a VM reset.
