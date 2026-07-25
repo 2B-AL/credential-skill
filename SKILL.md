@@ -69,8 +69,8 @@ For an Agent exposing the staged browser commands, prefer this state-driven sequ
 ```text
 credential-agent browser prepare [--user-data-dir DIR ...] --output json
 credential-agent browser status --output json
-credential-agent browser install-auto --timeout 2m --output json # macOS when visible-auto-install is advertised
-credential-agent browser open-install --output json       # only when disconnected/version-mismatched
+credential-agent browser activate --timeout 2m --output json     # no-op or background self-reload
+credential-agent browser open-install --output json       # only when activate requires first install
 credential-agent browser wait --for connected --timeout 10m --output json
 credential-agent browser configure-policies --output json
 credential-agent browser open-permissions --output json   # only when required
@@ -106,9 +106,9 @@ If it returns `ready=true, connected=false`, continue device pairing and rerun t
 
 `prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides which UI action is actually needed. Do not reopen installation or permissions pages when the corresponding state is already ready.
 
-On a generic macOS endpoint whose `browser.features` contains `visible-auto-install`, prefer `browser install-auto` after `prepare`. It drives only visible Accessibility semantic controls, passes only the exact Agent-managed directory, and requires the fixed ID/build heartbeat before success. If it returns `ACCESSIBILITY_PERMISSION_REQUIRED`, ask for the one-time macOS Accessibility grant and retry the same command; do not use raw CDP, coordinates, screenshots, Profile edits, or Cookie APIs. Linux keeps the generic visible workflow, while my-cua keeps its Connector-owned CDP/UIA workflow.
+On a generic macOS endpoint whose `browser.features` contains `activate`, run `browser activate` after `prepare`. `details.browser_activation.action=none` continues immediately; `action=reload` uses the extension's separate `RELOAD_SELF` lifecycle channel and succeeds only after the exact new build reports HELLO. `BROWSER_INSTALL_USER_ACTION_REQUIRED` means the private unpacked extension has never been loaded: run `open-install`, leave the revealed Finder item and Chrome page visible, and ask only for Chrome's one-time Load unpacked gesture. `BROWSER_RELOAD_USER_ACTION_REQUIRED` is the one-release transition from a legacy extension: ask only for one visible Reload or browser restart. Do not request macOS Accessibility permission for installation and do not use raw CDP, coordinates, screenshots, Profile edits, or Cookie APIs. Linux keeps the generic visible workflow, while my-cua keeps its Connector-owned CDP/UIA workflow.
 
-`open-install` and `open-permissions` report only that Chrome accepted an open request. Confirm the visible internal URL through the browser-control channel already provided for the target, and navigate explicitly when Chrome ignores the launch request.
+`open-install` returns a structured `load_unpacked` handoff and reveals the exact Agent-managed directory in Finder on macOS; it still reports `verified=false` until the heartbeat arrives. `open-permissions` likewise reports only that Chrome accepted an open request. Confirm visible state through the browser-control channel already provided for the target, and navigate explicitly when Chrome ignores the launch request.
 
 For an older compatible Agent, use the combined fallback:
 

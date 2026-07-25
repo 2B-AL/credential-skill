@@ -62,8 +62,8 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 ## Browser integration
 
 - Inspect `browser status --output json` and its `distribution_mode` before reopening anything. Do not infer the repair path from Windows/Linux alone.
-- In generic `unpacked` mode, Chrome opens but not `chrome://extensions/`: rerun the Agent open-install step, then use the safe browser-assist script and visible UI.
-- On generic macOS, prefer `browser install-auto` when advertised. `ACCESSIBILITY_PERMISSION_REQUIRED` needs a one-time System Settings grant; `BROWSER_UI_CHANGED` is a fail-closed Chrome accessibility-tree mismatch and must not trigger coordinate clicks or Profile editing.
+- In generic `unpacked` mode, run `browser activate` first. `BROWSER_INSTALL_USER_ACTION_REQUIRED` means the extension is absent: rerun `open-install`, which reveals the exact Finder item and emits a structured `load_unpacked` handoff. If Chrome ignores the internal URL, use the safe browser-assist script and visible UI.
+- `BROWSER_RELOAD_USER_ACTION_REQUIRED` means the currently running legacy extension predates `RELOAD_SELF`; ask for one visible Reload or browser restart, then rerun `browser wait`. Current extensions update in the background and are complete only when the exact new build heartbeat arrives. Do not request macOS Accessibility permission for installation.
 - In my-cua `unpacked` mode, run the Connector's `credential-browser ensure`; do not duplicate it with `open-install`, screenshot-driven UI automation, or extension-page UIA. CDP owns Chrome controls and UIA is limited to the native folder picker.
 - After a my-cua E2E test, `credential-agent reset-e2e` must return `pair_ready=true`. A missing device assertion must fail before any browser mutation. A failed Guest artifact push or Broker build-key mismatch is a deployment failure, not advisory readiness; rerun `dev-env api-start` and do not start pairing until the Connector probe succeeds.
 - In either managed mode, never open developer mode or load a directory. An absent or stale extension is a Chrome Policy, Store publication, release identity, or signed-artifact error.

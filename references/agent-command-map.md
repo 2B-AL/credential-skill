@@ -138,6 +138,7 @@ Staged setup/repair commands for current Agents:
 ```text
 credential-agent browser prepare [--user-data-dir DIR ...] --output json
 credential-agent browser status --output json
+credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install --output json
 credential-agent browser wait --for connected --timeout 10m --output json
 credential-agent browser configure-policies --output json
@@ -169,7 +170,7 @@ credential-agent browser prepare --distribution-mode managed_store \
 credential-agent browser prepare --distribution-mode managed_self_hosted --output json
 ```
 
-Never invent or substitute Store identity fields. When a target Connector owns preparation, observe its readiness state instead of issuing a second prepare. For my-cua, `credential-browser ensure` is the idempotent Connector operation and must not create a model task. Call `open-install` only in the generic unpacked workflow and only when `browser status` proves it is needed. `open-permissions` remains a visible exact-Origin handoff in every mode. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; its first target Sync Job delivers the exact policy through a metadata-only preparation task, waits for the authorization heartbeat, and only then runs Restore in the same Job. Use legacy `browser setup` as the feature-detected fallback only on older Agents.
+Never invent or substitute Store identity fields. When a target Connector owns preparation, observe its readiness state instead of issuing a second prepare. For my-cua, `credential-browser ensure` is the idempotent Connector operation and must not create a model task. In the generic unpacked workflow, call `activate` before any UI: use `open-install` only for `BROWSER_INSTALL_USER_ACTION_REQUIRED`, and request one visible Reload only for the legacy transition error `BROWSER_RELOAD_USER_ACTION_REQUIRED`. `open-permissions` remains a visible exact-Origin handoff in every mode. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; its first target Sync Job delivers the exact policy through a metadata-only preparation task, waits for the authorization heartbeat, and only then runs Restore in the same Job. Use legacy `browser setup` as the feature-detected fallback only on older Agents.
 
 All currently authenticated supported sites:
 

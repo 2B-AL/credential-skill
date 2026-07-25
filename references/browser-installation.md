@@ -28,7 +28,7 @@ Current Agents expose a staged, machine-readable workflow:
 ```text
 credential-agent browser prepare [--user-data-dir DIR ...] --output json
 credential-agent browser status --output json
-credential-agent browser install-auto --timeout 2m --output json
+credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install --output json
 credential-agent browser wait --for connected --timeout 10m --output json
 credential-agent browser configure-policies --output json
@@ -64,7 +64,7 @@ Both forms install Native Messaging, download and verify the signed extension ar
 
 1. Run the distribution-appropriate `browser prepare --output json`, including every `chrome.user_data_dirs` value returned by host inspection. For my-cua unpacked mode, the Connector owns this invocation and validates the exact returned directory and fixed Extension ID. For `managed_store`, the platform must add exact Store ID/build/manifest flags. This step does not require enrollment or a healthy daemon and can overlap OAuth/pair approval.
 2. Run `browser status --output json`. Require connected runtime ID/build/manifest to match expected values.
-3. In unpacked mode only, a generic macOS endpoint advertising `visible-auto-install` should run `install-auto` when disconnected or stale. It uses visible Accessibility semantics and the exact Agent-managed directory, then requires the fixed identity heartbeat. Other generic endpoints run `open-install` and use their visible browser channel. In managed modes, installation or update failure is a policy/release error; do not open developer mode.
+3. In unpacked mode, a generic endpoint advertising `activate` should run it before opening UI. `none` is already current; `reload` uses the extension's isolated `RELOAD_SELF` lifecycle action and waits for the exact new build heartbeat. Only `BROWSER_INSTALL_USER_ACTION_REQUIRED` opens the one-time guided `open-install` flow. A legacy extension may return `BROWSER_RELOAD_USER_ACTION_REQUIRED` once; ask only for Reload or a browser restart. In managed modes, installation or update failure is a policy/release error; do not open developer mode.
 4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first target Sync Job will deliver the exact policy through a metadata-only preparation task before Restore.
 5. Inspect `browser status` again. If every reported supported site is authorized, skip permission UI. Otherwise run `open-permissions`, approve exact origins, and yield on `wait --for permissions`.
 6. Continue to `doctor --strict --output json` and require Agent-observed state; do not infer success from an extension card or dialog alone.
@@ -79,11 +79,11 @@ This authorization step establishes the allowed capability range only. It must n
 
 Do not require staged commands on older releases and do not update a healthy Agent solely to avoid the legacy fallback unless the task requires deterministic machine orchestration.
 
-## Visible UI assistance
+## Guided first installation
 
 Use browser or computer control only on an unlocked visible desktop.
 
-On generic macOS, `browser install-auto` is the preferred visible helper when advertised. The first invocation may return `ACCESSIBILITY_PERMISSION_REQUIRED`; ask the user to grant that one OS permission and retry. Agent records whether this helper enabled Developer mode and restores that toggle only when the later full uninstall owns it. The command must fail closed if Chrome's semantic controls changed, and must never fall back to coordinates, screenshots, raw CDP, Profile edits, or Cookie APIs. The manual labels below remain the fallback for older Agents and Linux. This macOS helper does not replace the my-cua Connector path.
+On generic macOS, do not use Accessibility automation for installation. `open-install` reveals the Agent-managed `manifest.json` in Finder and opens `chrome://extensions/`; its schema-v3 `user_action` describes only Chrome's unavoidable one-time Load unpacked gesture. The user may change Spaces or window focus without invalidating Agent state: completion is determined only by the fixed ID/build heartbeat. Once an extension advertising `RELOAD_SELF` is installed, future signed-directory updates activate in the background. This generic path does not replace the my-cua Connector path.
 
 Semantic labels:
 
@@ -116,7 +116,7 @@ For a my-cua target whose contract is `unpacked`, do not repeat the generic visi
 
 For repeated my-cua E2E tests, the same Connector owns the inverse transition: clear only policy-known restored sites while the extension is connected, remove the exact fixed-ID extension through authenticated CDP, confirm the Chrome removal dialog semantically, disable Developer mode through bounded UIA, then let Agent-owned commands remove Native Messaging and local enrollment. Do not edit Chrome profile files or treat a missing extension as a reset failure.
 
-Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify the browser. On Linux, use the browser opened by Agent; it detects `google-chrome`, `google-chrome-stable`, `chromium`, and `chrome`. Do not rely on Unix executable bits surviving GitHub ZIP installation.
+Use `sh scripts/browser-assist-macos.sh DIRECTORY` or invoke `scripts/browser-assist-windows.ps1 -ExtensionDirectory DIRECTORY` through PowerShell only when Agent failed to open the page/directory. These scripts prepare visible state; they do not install or modify the browser and do not require Accessibility. On Linux, use the browser opened by Agent; it detects `google-chrome`, `google-chrome-stable`, `chromium`, and `chrome`. Do not rely on Unix executable bits surviving GitHub ZIP installation.
 
 ## Manual fallback
 
@@ -153,7 +153,7 @@ Directory presence is not success. Require:
 - running policy digests match the Agent-delivered policies
 - all policies already delivered to this endpoint have their required origins authorized
 
-If versions differ, reload the extension card. If the browser continues running the old code, remove only this extension and load the same managed directory again.
+If versions differ, run `browser activate`. A `RELOAD_SELF`-capable extension reloads itself and the Agent waits for the exact new build heartbeat. A legacy extension needs one final visible Reload or browser restart; do not remove and reinstall it automatically. If the first installation is absent, use the guided `open-install` handoff.
 
 ## Final validation
 

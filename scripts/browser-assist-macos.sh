@@ -14,11 +14,20 @@ if [ ! -d "$DIRECTORY" ] || [ ! -f "$DIRECTORY/manifest.json" ]; then
   echo "extension directory is missing manifest.json" >&2
   exit 2
 fi
-open "$DIRECTORY"
+open -R "$DIRECTORY/manifest.json"
 open -b com.google.Chrome -u 'chrome://extensions/'
 python3 - "$DIRECTORY" <<'PY'
 import json
 import sys
 
-print(json.dumps({"ok": True, "directory": sys.argv[1], "url": "chrome://extensions/"}, separators=(",", ":")))
+print(json.dumps({
+    "ok": True,
+    "directory": sys.argv[1],
+    "url": "chrome://extensions/",
+    "verified": False,
+    "user_action": {
+        "type": "load_unpacked",
+        "extension_directory_revealed": True,
+    },
+}, separators=(",", ":")))
 PY

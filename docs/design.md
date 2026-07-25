@@ -487,6 +487,7 @@ credential-agent doctor --strict --output json
 credential-agent setup --skip-browser --event-format jsonl
 credential-agent browser prepare --output json
 credential-agent browser status --output json
+credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install
 credential-agent browser open-permissions
 credential-agent browser wait --for connected --timeout 2m --output json
@@ -637,23 +638,22 @@ Skill 不自行解压或编辑扩展文件。
 
 只看到扩展目录存在不代表已经安装。
 
-### 14.3 可视化自动安装与 my-cua Connector
+### 14.3 引导式首次安装、后台更新与 my-cua Connector
 
-通用 `unpacked` 目标优先使用 Codex 可用的浏览器或电脑操作能力。明确选择 `unpacked` 的开发 my-cua 不重复这套操作，而是调用其 Credential Agent Connector。
+通用 `unpacked` 目标先调用 `browser activate`。已安装且版本一致时直接继续；支持 `RELOAD_SELF` 的扩展由独立生命周期通道后台重载，并以精确新 Build 心跳判定成功。只有扩展从未安装时才进入 Chrome 可见的首次加载流程。明确选择 `unpacked` 的开发 my-cua 不重复这套操作，而是调用其 Credential Agent Connector。
 
 操作顺序：
 
-1. 调用 `browser open-install`。
-2. 确认当前页面是 `chrome://extensions/`。
-3. 检查开发者模式是否已开启。
-4. 如未开启，点击开发者模式。
-5. 点击“加载未打包的扩展程序”。
-6. 在系统文件选择器中输入 Agent 返回的绝对路径。
-7. 选择目录。
-8. 调用 `browser wait --for connected`。
-9. 检查运行版本与准备版本一致。
+1. 调用 `browser activate`。
+2. `action=none` 或后台 reload 成功时直接继续。
+3. `BROWSER_INSTALL_USER_ACTION_REQUIRED` 时调用 `browser open-install`。
+4. Agent 在 Finder 中显示精确 `manifest.json`，并打开 `chrome://extensions/`。
+5. 用户仅在首次安装时开启开发者模式、点击“加载未打包的扩展程序”并选择已显示的目录。
+6. `BROWSER_RELOAD_USER_ACTION_REQUIRED` 只用于旧扩展过渡，用户手动 Reload 或重启一次浏览器，不自动移除重装。
+7. 调用 `browser wait --for connected`。
+8. 检查运行版本与准备版本一致。
 
-必须基于可访问性标签、页面文字和可见状态操作，不使用固定屏幕坐标作为唯一定位方式。
+Mac 首次安装不使用 Accessibility 自动点击，也不依赖 Chrome 窗口位于当前 Space；Agent 只准备并定位目录，Chrome 强制要求的手势由用户完成。完成状态只能来自 Native Messaging heartbeat。
 
 my-cua Connector 必须使用 Agent 返回的受管目录和固定扩展 ID，通过认证 CDP 的 Accessibility tree 操作 `chrome://extensions/`，并且只在 Chrome 原生目录选择器中使用 UIA。它不得使用截图循环、任意 JavaScript、Profile 文件修改或 CDP Cookie/Storage 方法；安装后仍由 Agent 的结构化状态和 Native Messaging 心跳判定成功。
 
@@ -667,10 +667,10 @@ my-cua Connector 必须使用 Agent 返回的受管目录和固定扩展 ID，�
 
 ### 14.4 macOS 约束
 
-- 可能需要 Codex 或终端具备辅助功能权限。
-- 系统文件选择器可能由 Finder 负责。
+- 首次私有 unpacked 安装仍需 Chrome 用户手势，但不要求 Codex 或终端具备辅助功能权限。
+- Agent 通过 Finder 显示目标 `manifest.json`，减少文件选择成本。
 - Chrome 已运行时应把内部 URL 发送给现有实例。
-- 自动化权限不可用时立即进入人工回退。
+- 安装后扩展版本更新使用 `RELOAD_SELF`，不再依赖窗口焦点或 Space。
 
 ### 14.5 Windows 约束
 
@@ -1016,9 +1016,9 @@ cancelled
 
 ```text
 browser prepare
-  -> 打开 chrome://extensions
-  -> 请求用户或 UI 自动化点击刷新
-  -> 等待目标版本心跳
+  -> browser activate
+  -> RELOAD_SELF 后等待目标版本心跳
+  -> 仅旧扩展请求一次可见 Reload
 ```
 
 不得把旧扩展在线误判为更新成功。
@@ -1026,6 +1026,7 @@ browser prepare
 ### 19.6 Chrome 页面没有正确打开
 
 - 再次使用 Agent 的 `browser open-install`。
+- 只在 `BROWSER_INSTALL_USER_ACTION_REQUIRED` 时使用；版本更新优先 `browser activate`。
 - Windows 使用新窗口打开内部 URL。
 - macOS 通过 LaunchServices 把 URL 发送给现有 Chrome。
 - 仍失败时输出可复制的内部 URL。
@@ -1308,7 +1309,7 @@ Agent：
 
 - `status/devices/doctor` JSON 输出。
 - `setup/pair` JSONL 事件。
-- `browser prepare/status/open-install/open-permissions/wait`。
+- `browser prepare/status/activate/open-install/open-permissions/wait`。
 - 稳定错误码。
 - 保持现有人类 CLI 兼容。
 
@@ -1415,11 +1416,11 @@ Agent：
 
 缓解：语义定位、版本测试、快速人工回退。
 
-### 29.2 macOS 辅助功能权限
+### 29.2 macOS 首次安装手势
 
-影响：无法自动点击。
+影响：普通非托管 Chrome 仍要求用户首次加载私有 unpacked 扩展。
 
-缓解：检测权限，不循环尝试，立即进入人工回退。
+缓解：Agent 自动下载、验签、解压、打开扩展页并在 Finder 中精确显示目录；用户只完成 Chrome 强制要求的最小手势，后续更新通过 `RELOAD_SELF` 后台完成。
 
 ### 29.3 Windows 云桌面无活动桌面
 
