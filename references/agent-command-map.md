@@ -170,6 +170,8 @@ credential-agent browser prepare --distribution-mode managed_store \
 credential-agent browser prepare --distribution-mode managed_self_hosted --output json
 ```
 
+Use the composite fast path directly from the target baseline. Do not precede it with the standalone `pair-auto` or `credential-browser ensure`; those commands remain individual repair/inspection operations. The adapter owns one temporary session, always cleans it up, and returns authoritative Job state with bounded direct Connector health when the Job remains pending.
+
 Never invent or substitute Store identity fields. When a target Connector owns preparation, observe its readiness state instead of issuing a second prepare. For my-cua, `credential-browser ensure` is the idempotent Connector operation and must not create a model task. In the generic unpacked workflow, call `activate` before any UI: use `open-install` only for `BROWSER_INSTALL_USER_ACTION_REQUIRED`, and request one visible Reload only for the legacy transition error `BROWSER_RELOAD_USER_ACTION_REQUIRED`. `open-permissions` remains a visible exact-Origin handoff in every mode. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; its first target Sync Job delivers the exact policy through a metadata-only preparation task, waits for the authorization heartbeat, and only then runs Restore in the same Job. Use legacy `browser setup` as the feature-detected fallback only on older Agents.
 
 All currently authenticated supported sites:

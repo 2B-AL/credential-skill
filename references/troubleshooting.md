@@ -82,7 +82,7 @@ On Windows, invoke an executable variable with `& $Agent doctor`, not `$Agent do
 
 - Target receives before manual `pull`: normal; background Agent may have already consumed the assignment.
 - `pull` says nothing pending after source reports received: normal and not a version mismatch.
-- `pending_target`: keep the returned Job ID, verify target `doctor`, background Agent, network, and authorization, then run `credential-agent job wait JOB_ID --timeout 5m --output jsonl` when advertised. Do not rerun the original sync.
+- `pending_target`: keep the returned Job ID. On development my-cua, use the direct Credential Connector health operation surfaced by the composite adapter; do not launch a model task for diagnosis. On generic targets, verify target `doctor`, background Agent, network, and authorization, then run `credential-agent job wait JOB_ID --timeout 5m --output jsonl` when advertised. Do not rerun the original sync.
 - A current target holds a bounded long poll for assignments; normal pickup should not require repeated manual `pull`. A persistent delay indicates daemon/network/authorization health, not a reason to increase Skill sleeps.
 - For browser jobs, begin target-side visible permission inspection immediately after the source JSONL `create_sync_job` phase rather than after the source wait window. Approve only the exact policy origins, and leave the original Job active.
 - Machine output must end with a `result` event. Do not report success from an intermediate `phase` event, even when Capture succeeded.

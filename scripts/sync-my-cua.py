@@ -135,7 +135,13 @@ def read_event(events: queue.Queue, deadline: float) -> dict | None:
     return event
 
 
-def wait_jsonl_result(process: subprocess.Popen, events: queue.Queue, deadline: float) -> dict:
+def wait_jsonl_result(
+    process: subprocess.Popen,
+    events: queue.Queue,
+    deadline: float,
+    *,
+    allow_failure_result: bool = False,
+) -> dict:
     result = None
     while True:
         event = read_event(events, deadline)
@@ -150,9 +156,55 @@ def wait_jsonl_result(process: subprocess.Popen, events: queue.Queue, deadline: 
         process.kill()
         process.wait()
         raise WorkflowError("SYNC_TIMEOUT", "Source Agent did not exit after its final output.") from exc
-    if return_code != 0 or not result:
+    if not result or return_code != 0 and not allow_failure_result:
         raise WorkflowError("SOURCE_SYNC_FAILED", "Source Agent sync failed before a final result.")
     return result
+
+
+def stop_process(process: subprocess.Popen | None) -> None:
+    if process is None or process.poll() is not None:
+        return
+    process.kill()
+    process.wait()
+
+
+def wait_authoritative_job(agent: Path, job_id: str, deadline: float) -> dict:
+    remaining = deadline - time.monotonic()
+    if remaining <= 3:
+        raise WorkflowError("SYNC_TIMEOUT", "No observation window remains for the authoritative Sync Job.", job_id=job_id)
+    # Finish the Agent's bounded wait before the adapter deadline so its
+    # pending_target result is preserved instead of becoming a subprocess
+    # timeout with ambiguous remote state.
+    observation_seconds = max(1, int(remaining) - 2)
+    waiter = None
+    try:
+        waiter, waiter_events = start_jsonl([
+            str(agent), "job", "wait", job_id,
+            "--timeout", f"{observation_seconds}s", "--output", "jsonl",
+        ])
+        return wait_jsonl_result(waiter, waiter_events, deadline, allow_failure_result=True)
+    finally:
+        stop_process(waiter)
+
+
+def target_health(cua_cli: Path, session_id: str) -> dict:
+    try:
+        response = run_json(
+            cua_command(cua_cli, "credential-agent", "health", "--session-id", session_id),
+            30,
+            "TARGET_HEALTH_UNAVAILABLE",
+        )
+    except WorkflowError as exc:
+        return {"available": False, "error_code": exc.code}
+    data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    return {
+        "available": True,
+        "healthy": data.get("healthy") is True,
+        "device_ready": data.get("device_ready") is True,
+        "browser_ready": data.get("browser_ready") is True,
+        "warning_count": int(data.get("warning_count") or 0),
+        "issue_count": int(data.get("issue_count") or 0),
+    }
 
 
 def ensure_target_network(cua_cli: Path, session_id: str, sites: list[str], deadline: float) -> dict:
@@ -209,102 +261,125 @@ def run(args: argparse.Namespace) -> dict:
         raise WorkflowError("TARGET_PAIR_FAILED", "CUA pairing did not return an exact ready device and workflow session.")
     emit({"schema_version": 1, "type": "phase", "phase": "target_pair", "status": "succeeded", "device_id": device_id})
 
-    source, source_events = start_jsonl([
-        str(agent), "browser", "sync", "--to", device_id, "--yes", "--output", "jsonl", *sites
-    ])
-    job_id = ""
-    source_result = None
+    # pair-auto returns a temporary workflow session. Delete that exact session
+    # on success, failure, or timeout after all local observers are stopped.
     try:
-        while True:
-            event = read_event(source_events, deadline)
-            if event is None:
-                break
-            if event.get("type") == "phase" and event.get("phase") == "create_sync_job" and event.get("status") == "succeeded":
-                details = event.get("details") if isinstance(event.get("details"), dict) else {}
-                job = details.get("job") if isinstance(details.get("job"), dict) else {}
-                job_id = str(job.get("id") or "").strip()
-                break
-        if not job_id:
-            source_result = wait_jsonl_result(source, source_events, deadline)
-            raise WorkflowError("SYNC_JOB_MISSING", "Source Agent did not create an authoritative Sync Job.")
-
-        authorization = run_json(
-            cua_command(
-                cua_cli,
-                "credential-browser",
-                "authorize-begin",
-                *sites,
-                "--session-id",
-                session_id,
-                "--timeout-seconds",
-                "30",
-            ),
-            35,
-            "TARGET_AUTHORIZATION_FAILED",
-        )
-        authorization_data = authorization.get("data") if isinstance(authorization.get("data"), dict) else {}
-        operation = authorization_data.get("operation") if isinstance(authorization_data.get("operation"), dict) else {}
-        operation_id = str(operation.get("operation_id") or "").strip()
-        if not operation_id:
-            raise WorkflowError("TARGET_AUTHORIZATION_FAILED", "CUA did not return an authorization operation id.")
-
-        network = ensure_target_network(cua_cli, session_id, sites, deadline)
-        network_data = network.get("data") if isinstance(network.get("data"), dict) else {}
-        emit({
-            "schema_version": 1,
-            "type": "phase",
-            "phase": "target_network",
-            "status": "succeeded",
-            "mode": (network_data.get("network") or {}).get("mode"),
-        })
-
-        authorized = run_json(
-            cua_command(
-                cua_cli,
-                "credential-browser",
-                "authorize-watch",
-                operation_id,
-                "--timeout-seconds",
-                str(max(1, int(deadline - time.monotonic()))),
-                "--poll-interval-ms",
-                "500",
-            ),
-            max(2, int(deadline - time.monotonic()) + 1),
-            "TARGET_AUTHORIZATION_FAILED",
-        )
-        emit({"schema_version": 1, "type": "phase", "phase": "target_authorize", "status": "succeeded"})
-        source_result = wait_jsonl_result(source, source_events, deadline)
-    finally:
-        if source.poll() is None:
-            source.kill()
-            source.wait()
-
-    if source_result.get("status") == "pending_target":
-        waiter, waiter_events = start_jsonl([
-            str(agent), "job", "wait", job_id, "--timeout", "5m", "--output", "jsonl"
+        source, source_events = start_jsonl([
+            str(agent), "browser", "sync", "--to", device_id, "--yes", "--output", "jsonl", *sites
         ])
-        source_result = wait_jsonl_result(waiter, waiter_events, deadline)
-    if source_result.get("status") != "succeeded":
-        raise WorkflowError(
-            "SYNC_NOT_SUCCEEDED",
-            "The authoritative Sync Job did not succeed.",
-            job_id=job_id,
-            status=source_result.get("status"),
-        )
+        job_id = ""
+        source_result = None
+        try:
+            while True:
+                event = read_event(source_events, deadline)
+                if event is None:
+                    break
+                if event.get("type") == "phase" and event.get("phase") == "create_sync_job" and event.get("status") == "succeeded":
+                    details = event.get("details") if isinstance(event.get("details"), dict) else {}
+                    job = details.get("job") if isinstance(details.get("job"), dict) else {}
+                    job_id = str(job.get("id") or "").strip()
+                    break
+            if not job_id:
+                source_result = wait_jsonl_result(source, source_events, deadline, allow_failure_result=True)
+                raise WorkflowError("SYNC_JOB_MISSING", "Source Agent did not create an authoritative Sync Job.")
 
-    run_json(
-        cua_command(cua_cli, "sessions", "delete", "--session-id", session_id, "--allow-empty"),
-        30,
-        "SESSION_CLEANUP_FAILED",
-    )
-    return {
-        "schema_version": 1,
-        "status": "succeeded",
-        "device_id": device_id,
-        "job_id": job_id,
-        "sites": sites,
-        "duration_ms": int((time.monotonic() - started) * 1000),
-    }
+            authorization = run_json(
+                cua_command(
+                    cua_cli,
+                    "credential-browser",
+                    "authorize-begin",
+                    *sites,
+                    "--session-id",
+                    session_id,
+                    "--timeout-seconds",
+                    "30",
+                ),
+                35,
+                "TARGET_AUTHORIZATION_FAILED",
+            )
+            authorization_data = authorization.get("data") if isinstance(authorization.get("data"), dict) else {}
+            operation = authorization_data.get("operation") if isinstance(authorization_data.get("operation"), dict) else {}
+            operation_id = str(operation.get("operation_id") or "").strip()
+            if not operation_id:
+                raise WorkflowError("TARGET_AUTHORIZATION_FAILED", "CUA did not return an authorization operation id.")
+
+            network = ensure_target_network(cua_cli, session_id, sites, deadline)
+            network_data = network.get("data") if isinstance(network.get("data"), dict) else {}
+            emit({
+                "schema_version": 1,
+                "type": "phase",
+                "phase": "target_network",
+                "status": "succeeded",
+                "mode": (network_data.get("network") or {}).get("mode"),
+            })
+
+            run_json(
+                cua_command(
+                    cua_cli,
+                    "credential-browser",
+                    "authorize-watch",
+                    operation_id,
+                    "--timeout-seconds",
+                    str(max(1, int(deadline - time.monotonic()))),
+                    "--poll-interval-ms",
+                    "500",
+                ),
+                max(2, int(deadline - time.monotonic()) + 1),
+                "TARGET_AUTHORIZATION_FAILED",
+            )
+            emit({"schema_version": 1, "type": "phase", "phase": "target_authorize", "status": "succeeded"})
+            source_result = wait_jsonl_result(source, source_events, deadline, allow_failure_result=True)
+        finally:
+            stop_process(source)
+
+        if source_result.get("status") == "pending_target":
+            source_result = wait_authoritative_job(agent, job_id, deadline)
+        if source_result.get("status") == "pending_target":
+            details = source_result.get("details") if isinstance(source_result.get("details"), dict) else {}
+            job = details.get("job") if isinstance(details.get("job"), dict) else {}
+            raise WorkflowError(
+                "SYNC_PENDING_TARGET",
+                "The authoritative Sync Job is still pending after the bounded observation window.",
+                job_id=job_id,
+                status=str(job.get("status") or "pending_target"),
+                target_health=target_health(cua_cli, session_id),
+            )
+        if source_result.get("status") != "succeeded":
+            raise WorkflowError(
+                "SYNC_NOT_SUCCEEDED",
+                "The authoritative Sync Job did not succeed.",
+                job_id=job_id,
+                status=source_result.get("status"),
+                target_health=target_health(cua_cli, session_id),
+            )
+
+        return {
+            "schema_version": 1,
+            "status": "succeeded",
+            "device_id": device_id,
+            "job_id": job_id,
+            "sites": sites,
+            "duration_ms": int((time.monotonic() - started) * 1000),
+        }
+    finally:
+        active_error = sys.exc_info()[0] is not None
+        try:
+            run_json(
+                cua_command(cua_cli, "sessions", "delete", "--session-id", session_id, "--allow-empty"),
+                30,
+                "SESSION_CLEANUP_FAILED",
+            )
+            emit({"schema_version": 1, "type": "phase", "phase": "session_cleanup", "status": "succeeded"})
+        except WorkflowError as cleanup_error:
+            emit({
+                "schema_version": 1,
+                "type": "phase",
+                "phase": "session_cleanup",
+                "status": "failed",
+                "error_code": cleanup_error.code,
+            })
+            if not active_error:
+                raise
 
 
 def parser() -> argparse.ArgumentParser:
