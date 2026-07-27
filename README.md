@@ -84,33 +84,16 @@ python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/inst
 
 更新后新建 Codex 任务或重启 Codex。
 
-## 签名运行时发布
+## 生产 CUA 运行时依赖
 
-生产 CUA 不复制本仓库代码，而是通过独立的签名 Skill release manifest
-安装版本化运行时。发布系统使用只存在于 Secret 中的 Ed25519 私钥执行：
+生产 `cua_skill_bytesso` 将本仓库作为唯一可信的 Credential Skill 源，按
+已经 review 的完整 40 位 Git commit 从 GitHub codeload 安装到版本化私有
+缓存。消费者拒绝任意仓库、分支名、tag、prompt 提供的 ref、目录穿越和
+符号链接，并在执行前验证必需脚本与 `cua-target/v1` 契约。
 
-```bash
-python3 scripts/build-skill-release.py \
-  --version 1.4.0 \
-  --source-commit "$(git rev-parse HEAD)" \
-  --archive-url https://<controlled-host>/credential-skill-1.4.0.zip \
-  --private-key /run/secrets/credential-skill-release-key \
-  --output-dir dist
-```
-
-私钥文件必须是 `0600` 的非符号链接常规文件。发布前用对应公钥验证
-`latest.json` 与 ZIP：
-
-```bash
-python3 scripts/verify-skill-release.py \
-  --manifest dist/latest.json \
-  --archive dist/credential-skill-1.4.0.zip \
-  --public-key /path/to/public.pem
-```
-
-CUA Skill 客户端固定发布公钥，并同时校验签名、协议、长度、SHA-256、ZIP
-路径和符号链接。Skill release、Credential Agent binary 和浏览器扩展仍是
-三类独立制品，不能共用清单或相互转运。
+Credential Skill 源码不需要单独的 TOS release manifest 或 Ed25519 发布
+密钥。Credential Agent binary 和浏览器扩展仍使用各自独立的签名制品发布
+链路，不能因为 Skill 使用 GitHub 分发而放宽。
 
 ## 最快使用方式
 
