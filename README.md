@@ -206,7 +206,7 @@ Codex 使用本 Skill 时会执行以下流程：
    - 选择 Agent 已经打开的 `chrome-extension` 目录。
 6. 通用目标在 UI 自动化不可用时由用户完成这一次可见操作；my-cua Connector 找不到唯一可操作节点时失败关闭，不回退到截图循环或扩展页 UIA。
 7. Agent 根据扩展心跳确认实际运行版本，而不是仅根据目录存在判断成功。
-8. 在扩展授权页面点击“启用全部支持的网站”。扩展只申请 Vault 当前策略中的精确 HTTPS Origin；以后新增站点时可能需要再确认一次新 Origin。
+8. Agent 通过只读状态确认全局 HTTPS host capability 和当前签名 Policy 的精确 Origin 均有效；正常流程不打开 Options，也不逐站请求权限。
 
 `unpacked` 与 `managed_self_hosted` 的固定扩展 ID：
 
@@ -220,7 +220,7 @@ Skill 不会修改 Chrome Profile、Cookie 数据库、Secure Preferences，也�
 
 当开发 my-cua 处于未配对基线时，优先执行 `credential-agent pair-auto`：Connector 为每个动作创建临时 session，目标 Agent 将短期配对码加密给本地已登录 Agent，本地 CLI 只输出设备 ID 和成功状态。多轮测试后执行 `credential-agent reset-e2e`，它先按精确设备 ID 中心撤销，再清理目标浏览器恢复状态、固定 ID 扩展、Developer mode、Native Messaging、后台任务和 Agent 本地身份，并以 `pair_ready=true` 作为完成条件。Linux sandbox 与普通电脑仍使用通用 Agent 配对/浏览器流程。
 
-受管模式没有扩展管理 UI 操作。Chrome Policy 完成预装后，CUA Connector 只可通过认证 CDP 通道打开精确的 `chrome-extension://<expected-id>/options.html`；不得暴露 raw CDP、任意页面 eval 或 Cookie 方法。由于 Chrome 的 optional host permission 仍要求用户手势，用户可能需要在扩展页对 Agent 签发策略中的精确 Origin 做一次可见确认。
+受管模式没有扩展管理 UI 操作。扩展以 required `host_permissions: ["https://*/*"]` 建立一次性 HTTPS 能力，不使用 `<all_urls>`，也不包含 HTTP、file 或 chrome scheme。CUA Connector 不得通过 Options、raw CDP、任意页面 eval 或 Cookie 方法改变权限；Vault 签名 Policy 与逐任务 `contains()` 检查仍是 fail-closed 业务边界。
 
 ## 支持的凭据类型
 
@@ -345,14 +345,14 @@ Agent 已经向用户展示并确认精确目标和网站后，自动编排使�
 "$AGENT" browser sync --to win-cloud --yes --output jsonl github
 ```
 
-自动编排应保留这个前台/可 yield 的进程。收到 `create_sync_job` 成功事件后，立即在目标设备自己的可见浏览器通道处理精确 Origin 权限，同时让源端继续等待。若最终返回 `pending_target`，续等原 Job，不要重新 Capture 或重复提交：
+自动编排应保留这个前台/可 yield 的进程。收到 `create_sync_job` 成功事件后继续等待同一个 Job；若目标报告 `waiting_permission`，只读检查 Chrome Site access，不打开 Options 或调用逐站权限 mutation。若最终返回 `pending_target`，续等原 Job，不要重新 Capture 或重复提交：
 
 ```bash
 "$AGENT" job status JOB_ID --output json
 "$AGENT" job wait JOB_ID --timeout 5m --output jsonl
 ```
 
-“启用全部支持的网站”只是授予策略范围内的同步能力，不会把指定网站同步变成 `--all`。支持网站列表来自 Credential Vault 动态策略，Agent 校验后下发给通用扩展；扩展心跳回报已缓存策略摘要和授权状态。Skill 不应写死网站或数量。Agent 只更新缺失或 digest 不一致的所选策略；全部一致时跳过策略写入和 30 秒等待。JSON/JSONL 的 `details.policies` 返回 `checked`、`already_current` 和 `updated`。新增普通网站只更新 Vault 策略并递增 `policy_version`，不需要发布新扩展。Google 当前只保证策略允许的页面验证；Google Search 展示登录成功并不表示 Gmail、Drive 或 Google Account 敏感页面一定无需再次认证。
+required `https://*/*` 只是浏览器能力范围，不会把指定网站同步变成 `--all`；Vault 签名 Policy 仍决定业务可访问站点。支持网站列表来自 Credential Vault 动态策略，Agent 校验后下发给通用扩展；扩展心跳回报已缓存策略摘要和 `contains()` 授权状态。Skill 不应写死网站或数量。Agent 只更新缺失或 digest 不一致的所选策略；全部一致时跳过策略写入和 30 秒等待。JSON/JSONL 的 `details.policies` 返回 `checked`、`already_current` 和 `updated`。新增普通 HTTPS 网站只更新 Vault 策略并递增 `policy_version`，不需要发布新扩展或逐站授权。Google 当前只保证策略允许的页面验证；Google Search 展示登录成功并不表示 Gmail、Drive 或 Google Account 敏感页面一定无需再次认证。
 
 撤销某个网站在凭据中心的授权/快照：
 

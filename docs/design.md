@@ -91,8 +91,8 @@ Skill 定位为 `credential-agent` 的安装和编排层，不重新实现凭据
 - 自动准备 Chrome 扩展。
 - 尽力自动完成加载未打包扩展。
 - 无法自动完成时只要求一次最少人工操作。
-- 自动打开站点授权页。
-- 尽力自动启用全部支持的网站。
+- 自动确认 required HTTPS host capability 和签名站点策略状态。
+- Chrome withholding 时失败关闭并给出只读诊断。
 - 完成健康检查。
 
 云电脑：
@@ -241,13 +241,13 @@ flowchart LR
   -> Vault 规范化与最小权限校验
   -> policy_version + policy_digest
   -> Agent 独立校验并通过 Native Messaging v2 下发
-  -> 扩展再次校验并申请精确 Origin
+  -> 扩展再次校验并确认精确 Origin 的权限有效
   -> Capture/Restore 结果绑定同一策略摘要
 ```
 
-新增普通网站时只修改 Vault 配置、递增 `policy_version` 并发布 Vault 配置；不重建 Agent 或扩展。只有新增扩展尚不具备的浏览器能力时，才需要升级协议或扩展。Manifest 的 `https://*/*` 只是 `optional_host_permissions` 声明上界，运行时禁止申请该通配权限。
+新增普通 HTTPS 网站时只修改 Vault 配置、递增 `policy_version` 并发布 Vault 配置；不重建 Agent 或扩展，也不逐站申请权限。只有新增扩展尚不具备的浏览器能力时，才需要升级协议或扩展。Manifest 使用 required `host_permissions: ["https://*/*"]`，不使用 `<all_urls>`，不增加 HTTP、file 或 chrome scheme。
 
-个人电脑在 `browser setup` 时获取全部启用策略。仅设备授权的云电脑不具备用户控制面 Token，可以在首次 Restore 任务中获得对应策略；若 Chrome 尚未授予该 Origin，扩展打开授权页，Agent 等待用户确认后自动重试。
+个人电脑在 `browser setup` 时获取全部启用策略。仅设备授权的云电脑不具备用户控制面 Token，可以在首次 Restore 任务中获得对应策略；正常 Site access 下新增精确 HTTPS Origin 会自然通过 `contains()`。若 Chrome withholding 导致检查失败，Agent 返回 `HOST_PERMISSION_REQUIRED` 并保持 fail-closed，不打开授权页或逐站请求。
 
 ## 7. Skill 包结构
 
@@ -489,9 +489,9 @@ credential-agent browser prepare --output json
 credential-agent browser status --output json
 credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install
-credential-agent browser open-permissions
 credential-agent browser wait --for connected --timeout 2m --output json
-credential-agent browser wait --for permissions --timeout 2m --output json
+credential-agent browser configure-policies --output json
+credential-agent browser status --output json
 credential-agent job status JOB_ID --output json
 credential-agent job wait JOB_ID --timeout 5m --output jsonl
 ```
@@ -702,23 +702,14 @@ Chrome 已打开。
 
 禁止重新展示完整安装教程或要求用户输入 `Y` 确认已经完成。
 
-### 14.7 网站授权
+### 14.7 HTTPS capability 与网站策略诊断
 
 扩展连接后：
 
-1. 调用 `browser open-permissions`。
-2. Agent 获取并校验 Vault 当前动态策略，扩展展示并尝试启用这些网站。
-3. 处理 Chrome 权限确认。
-4. 调用 `browser wait --phase authorized`。
-
-`chrome.permissions.request()` 必须由用户手势触发。可视化自动化是在用户可见桌面执行的辅助操作，不改变 Chrome 权限模型。
-
-如果无法自动点击，只显示：
-
-```text
-网站授权页已经打开。
-请点击“启用全部支持的网站”，我会自动检查结果。
-```
+1. Agent 获取并校验 Vault 当前动态策略。
+2. 扩展只读检查 required `https://*/*` capability 和每个精确 Policy Origin 的 `contains()`。
+3. 正常状态直接继续，不调用 `chrome.permissions.request/remove()`。
+4. Chrome withholding 时返回 `HOST_PERMISSION_REQUIRED`，由 Options 只读展示诊断，不绕过。
 
 ## 15. 初始化最终验收
 
@@ -913,7 +904,7 @@ credential-agent browser sync \
 规则：
 
 - 支持站点列表由 Vault 动态策略决定，并由 Agent 校验后返回。
-- “启用全部支持的网站”只授权能力范围，不选择同步范围；只有用户明确要求全部网站时使用 `--all`。
+- required HTTPS capability 只定义浏览器能力范围，不选择同步范围；只有用户明确要求全部网站时使用 `--all`。
 - `--all` 只捕获已登录网站。
 - 单站点同步只比较所选策略的 heartbeat digest；已一致的策略不再发送 `UPDATE_SITE_POLICY`，也不进入 30 秒 digest 等待。
 - `details.policies.checked`、`already_current` 和 `updated` 用于判断策略快路径；策略未更新不代表跳过 Capture 或 Job delivery。
@@ -1235,7 +1226,7 @@ Agent：
 1. 干净环境安装 Agent。
 2. OAuth 登录。
 3. 自动或辅助安装扩展。
-4. 启用全部网站。
+4. 确认 HTTPS capability 与签名 Policy Origin 均有效。
 5. `doctor --strict`。
 
 云电脑：
@@ -1309,7 +1300,7 @@ Agent：
 
 - `status/devices/doctor` JSON 输出。
 - `setup/pair` JSONL 事件。
-- `browser prepare/status/activate/open-install/open-permissions/wait`。
+- `browser prepare/status/activate/open-install/configure-policies/wait`；`open-permissions` 仅保留兼容诊断，不进入正常安装步骤。
 - 稳定错误码。
 - 保持现有人类 CLI 兼容。
 
@@ -1459,7 +1450,7 @@ Codex：
 ✓ 已完成用户登录
 ✓ 已启动后台同步
 ✓ 已准备并连接 Chrome 扩展
-✓ 已启用全部支持的网站
+✓ 已确认 HTTPS capability 与签名站点策略
 ✓ 凭据同步已就绪
 ```
 

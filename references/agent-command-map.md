@@ -142,8 +142,7 @@ credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install --output json
 credential-agent browser wait --for connected --timeout 10m --output json
 credential-agent browser configure-policies --output json
-credential-agent browser open-permissions --output json
-credential-agent browser wait --for permissions --timeout 10m --output json
+credential-agent browser status --output json
 ```
 
 Select the preparation contract from Agent capabilities or the target Connector:
@@ -170,9 +169,9 @@ credential-agent browser prepare --distribution-mode managed_store \
 credential-agent browser prepare --distribution-mode managed_self_hosted --output json
 ```
 
-Use the composite fast path directly from the target baseline. Do not precede it with the standalone `pair-auto` or `credential-browser ensure`; those commands remain individual repair/inspection operations. The adapter owns one temporary session, always cleans it up, and returns authoritative Job state with bounded direct Connector health when the Job remains pending. After `create_sync_job`, Connector network/authorization operations are advisory accelerators: their failure is reported as a bounded warning, while the same Job alone decides the final result.
+Use the composite fast path directly from the target baseline. Do not precede it with the standalone `pair-auto` or `credential-browser ensure`; those commands remain individual repair/inspection operations. The adapter owns one temporary session, always cleans it up, and returns authoritative Job state with bounded direct Connector health when the Job remains pending. After `create_sync_job`, only the Connector network operation is an advisory accelerator; the same Job alone decides the final result. The composite does not call permission-authorization actions.
 
-Never invent or substitute Store identity fields. When a target Connector owns preparation, observe its readiness state instead of issuing a second prepare. For my-cua, `credential-browser ensure` is the idempotent Connector operation and must not create a model task. In the generic unpacked workflow, call `activate` before any UI: use `open-install` only for `BROWSER_INSTALL_USER_ACTION_REQUIRED`, and request one visible Reload only for the legacy transition error `BROWSER_RELOAD_USER_ACTION_REQUIRED`. `open-permissions` remains a visible exact-Origin handoff in every mode. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; its first target Sync Job delivers the exact policy through a metadata-only preparation task, waits for the authorization heartbeat, and only then runs Restore in the same Job. Use legacy `browser setup` as the feature-detected fallback only on older Agents.
+Never invent or substitute Store identity fields. When a target Connector owns preparation, observe its readiness state instead of issuing a second prepare. For my-cua, `credential-browser ensure` is the idempotent Connector operation and must not create a model task. In the generic unpacked workflow, call `activate` before any UI: use `open-install` only for `BROWSER_INSTALL_USER_ACTION_REQUIRED`, and request one visible Reload only for the legacy transition error `BROWSER_RELOAD_USER_ACTION_REQUIRED`. Do not use `open-permissions` in the normal flow. `configure-policies` is digest-aware and may report `deferred=true` on a device-only endpoint; its first target Sync Job delivers the exact policy through a metadata-only preparation task, verifies effective access under the required HTTPS wildcard, and then runs Restore in the same Job. Use legacy `browser setup` as the feature-detected fallback only on older Agents.
 
 All currently authenticated supported sites:
 
@@ -180,7 +179,7 @@ All currently authenticated supported sites:
 credential-agent browser sync --to DEVICE --all
 ```
 
-Use this only for an explicit all-sites request. Enabling all supported sites during browser setup grants the policy-defined host-permission capability; it does not select `--all` for later syncs.
+Use this only for an explicit all-sites request. The required HTTPS host capability does not select `--all` for later syncs.
 
 Selected sites:
 
@@ -206,9 +205,9 @@ credential-agent browser sync --to DEVICE --yes --output jsonl github
 
 Do not drive the interactive confirmation by guessing prompt state or sending `Y\n` through a PTY. Use JSONL until the final `result` event, and retain the `operation_id` and Sync Job ID for diagnostics. Fall back to the interactive form only when the installed Agent does not support these flags.
 
-After the `create_sync_job` JSONL phase, keep the source process running and immediately handle any exact-origin permission UI on the target through its own browser channel. The target may be a Linux sandbox or a Windows cloud desktop; this orchestration does not import or call another Skill. If the source result is `pending_target`, resume the same ID with `job wait`; do not rerun `browser sync`.
+After the `create_sync_job` JSONL phase, keep the source process running. If the target reports `waiting_permission`, inspect its Site-access status read-only; do not open Options or call a permission mutation. The target may be a Linux sandbox or a Windows cloud desktop; this orchestration does not import or call another Skill. If the source result is `pending_target`, resume the same ID with `job wait`; do not rerun `browser sync`.
 
-Current Vault and Agent versions expose this pause as the nonterminal Job/Item status `waiting_permission` with reason `browser_host_permission`. After the target heartbeat confirms the exact policy digest and Origin grant, the same Job emits `restoring_sessions` again and continues. Preserve these states in JSONL; `pending_target` is only the caller's wait timeout result and must not overwrite the stored Job status.
+Current Vault and Agent versions expose Chrome withholding as the nonterminal Job/Item status `waiting_permission` with reason `browser_host_permission`. After the user restores Site access and the target heartbeat confirms the exact policy digest and effective Origin access, the same Job emits `restoring_sessions` again and continues. Preserve these states in JSONL; `pending_target` is only the caller's wait timeout result and must not overwrite the stored Job status.
 
 They also expose `waiting_network` with reason `browser_network_unreachable`. A compatible target first probes `PROBE_SITE_REACHABILITY`; after reachability returns, `resumed` moves the same Job to `validating` and only then runs `VALIDATE_SITE`. This path never sends another Restore payload.
 

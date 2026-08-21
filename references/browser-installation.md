@@ -6,7 +6,7 @@
 - State machine
 - Visible UI assistance
 - Manual fallback
-- Permission authorization
+- HTTPS capability diagnosis
 - Upgrade repair
 - Final validation
 
@@ -32,8 +32,7 @@ credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install --output json
 credential-agent browser wait --for connected --timeout 10m --output json
 credential-agent browser configure-policies --output json
-credential-agent browser open-permissions --output json
-credential-agent browser wait --for permissions --timeout 10m --output json
+credential-agent browser status --output json
 ```
 
 The status contract also exposes `distribution_mode`, `expected_extension_id`, `expected_build_id`, and `expected_manifest_version`. Treat their combination as the browser identity:
@@ -58,7 +57,7 @@ For a managed browser with a custom user-data directory:
 credential-agent browser setup --user-data-dir /absolute/browser/user-data --timeout 10m
 ```
 
-Both forms install Native Messaging, download and verify the signed extension artifact, prepare the managed directory, connect the detected Chrome/Chromium extension, deliver current dynamic policies, authorize supported-site origins, and validate the running version. The staged form separates local preparation, UI action, policy delivery, and waits so an Agent orchestrator does not hold an opaque 10-minute command or repeat completed UI steps.
+Both forms install Native Messaging, download and verify the signed extension artifact, prepare the managed directory, connect the detected Chrome/Chromium extension, deliver current dynamic policies, and validate the running version plus required HTTPS capability. The staged form separates local preparation, installation UI, policy delivery, and waits so an Agent orchestrator does not hold an opaque 10-minute command or repeat completed UI steps.
 
 ## State machine
 
@@ -66,16 +65,16 @@ Both forms install Native Messaging, download and verify the signed extension ar
 2. Run `browser status --output json`. Require connected runtime ID/build/manifest to match expected values.
 3. In unpacked mode, a generic endpoint advertising `activate` should run it before opening UI. `none` is already current; `reload` uses the extension's isolated `RELOAD_SELF` lifecycle action and waits for the exact new build heartbeat. Only `BROWSER_INSTALL_USER_ACTION_REQUIRED` opens the one-time guided `open-install` flow. A legacy extension may return `BROWSER_RELOAD_USER_ACTION_REQUIRED` once; ask only for Reload or a browser restart. In managed modes, installation or update failure is a policy/release error; do not open developer mode.
 4. Run `browser configure-policies --output json`. `deferred=true` is valid only for a device-only endpoint where the first target Sync Job will deliver the exact policy through a metadata-only preparation task before Restore.
-5. Inspect `browser status` again. If every reported supported site is authorized, skip permission UI. Otherwise run `open-permissions`, approve exact origins, and yield on `wait --for permissions`.
+5. Inspect `browser status` again. Require the global HTTPS host capability and every signed Policy origin to pass the Agent/extension `contains()` checks. Do not call `open-permissions` or wait for permission as an installation step.
 6. Continue to `doctor --strict --output json` and require Agent-observed state; do not infer success from an extension card or dialog alone.
 
-The `open-*` JSON contract is request-oriented: `requested=true` and `verified=false` means Chrome accepted a launch request, not that the internal page is visibly active. Generic targets confirm the internal page through their visible browser-control channel. A my-cua Connector instead opens `chrome://extensions/` through its authenticated CDP broker and uses the fixed extension options URL for permission handoff.
+The install `open-*` JSON contract is request-oriented: `requested=true` and `verified=false` means Chrome accepted a launch request, not that the internal page is visibly active. Generic targets confirm the installation page through their visible browser-control channel. The Options page is read-only diagnosis and is not part of normal installation.
 
-my-cua reports extension installation/heartbeat separately from exact-site authorization: `browser_extension_ready=true` can coexist with `browser_site_policy_deferred=true` before the first target Job, or `browser_permission_required=true` after signed policies arrive. Neither state should trigger another unpacked installation. Use asynchronous `authorize-begin` / `authorize-watch` for exact sites so a client timeout cannot make the permission mutation ambiguous.
+my-cua reports extension installation/heartbeat separately from effective Site access: `browser_extension_ready=true` can coexist with `browser_site_policy_deferred=true` before the first target Job, or `browser_permission_required=true` when Chrome withholds access after signed policies arrive. Neither state should trigger another unpacked installation or a permission mutation. The latter is a read-only diagnostic/fail-closed state.
 
 If feature detection shows that staged commands are unavailable, run legacy `browser setup` in a yielded terminal and follow the same visible UI rules.
 
-This authorization step establishes the allowed capability range only. It must not be translated into a later `browser sync --all`; selected-site requests remain selected-site actions.
+The required HTTPS capability establishes only a browser capability range. It must not be translated into a later `browser sync --all`; selected-site requests remain selected-site actions and signed Policy remains the business boundary.
 
 Do not require staged commands on older releases and do not update a healthy Agent solely to avoid the legacy fallback unless the task requires deterministic machine orchestration.
 
@@ -91,7 +90,6 @@ Semantic labels:
 - `加载未打包的扩展程序` / `Load unpacked`
 - `选择文件夹` / `Select Folder`
 - `重新加载` / `Reload`
-- `启用全部支持的网站` / `Enable all supported sites`
 
 Unpacked installation procedure only:
 
@@ -102,7 +100,7 @@ Unpacked installation procedure only:
 5. Confirm the installed extension ID is `lnpfljjigmgmakiclchpnoehbbceomeb`.
 6. Let Agent determine whether the heartbeat version matches.
 
-Managed installation has no extension-management procedure. Once Chrome Policy installs the extension, the only visible browser action that may remain is exact Origin permission authorization. A my-cua Connector may use its authenticated CDP broker to open only `chrome-extension://<expected-id>/options.html`; do not use raw CDP, arbitrary page eval, or Cookie methods.
+Managed installation has no extension-management procedure. Once Chrome Policy installs the extension, host-permission state is diagnosed through Agent/extension status. A my-cua Connector must not use raw CDP, arbitrary page eval, Cookie methods, or Options-page controls to mutate permission state.
 
 ### my-cua Connector-owned unpacked automation
 
@@ -133,11 +131,13 @@ Chrome/Chromium 已打开。
 
 Do not ask the user to type `Y` or confirm completion in the terminal. Leave Agent waiting.
 
-## Permission authorization
+## HTTPS capability diagnosis
 
-After connection, Agent fetches the currently enabled Vault policies and opens the extension options page. Chrome requires `optional_host_permissions` requests to originate from a user gesture, including for a preinstalled extension. Use visible UI to activate the exact site permission control and accept the expected host-permission prompt. Stop if the prompt requests permissions outside the exact origins displayed for those policies.
+The extension manifest declares required `host_permissions: ["https://*/*"]`; it does not declare the same pattern as optional and never uses `<all_urls>`. Installation therefore establishes the HTTPS capability once, without per-site `chrome.permissions.request()` or `remove()` calls. Do not open Options during normal setup; it is a read-only diagnostic page.
 
-The policy authority is Credential Vault. Extension heartbeat only reports the policy digests it cached and the origins the browser granted. Do not assume a fixed count or silently omit newly configured sites. On a device-only cloud endpoint, the first target Sync Job may install one policy through a metadata-only preparation task and wait before Restore. Leave Agent running, approve only the exact displayed origins, and let the same Job continue after the authorization heartbeat.
+The policy authority remains Credential Vault. Extension heartbeat reports the policy digests it cached and the exact origins for which `chrome.permissions.contains()` is effective. Do not assume a fixed count or silently omit newly configured sites. On a device-only cloud endpoint, the first target Sync Job may install one policy through a metadata-only preparation task; a future exact HTTPS origin should immediately become authorized under normal Site access and the same Job proceeds to Restore.
+
+If a user manually changes Chrome Site access to on-click or selected sites, the exact Policy-origin `contains()` check must return false. Agent reports `permissions_ready=false`, and the task fails closed with `HOST_PERMISSION_REQUIRED`. Diagnose the Chrome withholding state; never bypass it, request a per-origin fallback, or create a second Job.
 
 Repeated `browser setup` and selected-site sync are digest-aware. If the extension heartbeat already reports the exact Vault digest, Agent does not resend that policy or wait another 30 seconds for the same digest. Do not force a policy refresh merely because setup is being repeated; let Agent update only missing or stale policies.
 

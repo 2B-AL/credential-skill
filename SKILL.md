@@ -73,8 +73,7 @@ credential-agent browser activate --timeout 2m --output json     # no-op or back
 credential-agent browser open-install --output json       # only when activate requires first install
 credential-agent browser wait --for connected --timeout 10m --output json
 credential-agent browser configure-policies --output json
-credential-agent browser open-permissions --output json   # only when required
-credential-agent browser wait --for permissions --timeout 10m --output json
+credential-agent browser status --output json             # read-only HTTPS capability/policy diagnosis
 ```
 
 Choose the preparation branch from `capabilities.browser.distribution_mode` or the target Connector contract; never infer it from the OS alone:
@@ -83,7 +82,7 @@ Choose the preparation branch from `capabilities.browser.distribution_mode` or t
 - `managed_store`: only a target whose platform contract explicitly selects a published Chrome Web Store item. The Connector must supply the exact Store `extension_id`, expected build id, and numeric manifest version. Do not infer this mode merely because the target is Windows.
 - `managed_self_hosted`: only an AD/Azure AD/Chrome Enterprise managed Windows target. Agent verifies CRX/update metadata and serves the policy update from its loopback provider. Do not select this merely because the target is Windows.
 
-When a target has a Credential Agent Connector, let that Connector own `prepare`, Browser Owner launch, installation/reload, and version readiness. In my-cua unpacked mode, do not separately run `open-install` or start screenshot-driven UI automation: the Connector uses authenticated CDP for `chrome://extensions/` and UIA only for the Chrome-owned native folder picker. Use the target control channel only for the exact permission handoff it reports. This keeps the Skill generic for Linux sandboxes and other endpoints.
+When a target has a Credential Agent Connector, let that Connector own `prepare`, Browser Owner launch, installation/reload, and version readiness. In my-cua unpacked mode, do not separately run `open-install` or start screenshot-driven UI automation: the Connector uses authenticated CDP for `chrome://extensions/` and UIA only for the Chrome-owned native folder picker. Host-permission state is read-only: inspect status and repair Chrome Site access when withholding is detected, but never drive an extension permission mutation. This keeps the Skill generic for Linux sandboxes and other endpoints.
 
 For any CUA, the caller must explicitly supply the environment's Adapter and first inspect its capabilities:
 
@@ -116,16 +115,16 @@ python3 <skill-directory>/scripts/sync-cua-resource.py \
   --desktop-id ID env OPENAI_API_KEY
 ```
 
-Treat this composite as the single entry point from either an unpaired baseline or an already-ready target. Do not run a separate pair or browser ensure first: `credential-target begin` performs idempotent Connector preparation once and returns an opaque `workflow_id`. The composite consumes source Agent JSONL until the single Sync Job exists, starts asynchronous exact-site authorization, runs the policy-bounded target network helper, watches the same authorization operation, and waits for the same Job. Once that Job ID exists, it is the sole completion authority. Every exit path calls `credential-target finish` for that exact workflow; it never discovers or deletes arbitrary sessions. A bounded wait preserves `pending_target` plus structured target health. It never accepts a proxy address, pairing code, Cookie, Secret value, development URL, or operator token. Linux sandboxes and generic macOS/Linux targets continue using the generic workflow below.
+Treat this composite as the single entry point from either an unpaired baseline or an already-ready target. Do not run a separate pair or browser ensure first: `credential-target begin` performs idempotent Connector preparation once and returns an opaque `workflow_id`. The composite consumes source Agent JSONL until the single Sync Job exists, runs the policy-bounded target network helper, and waits for that same Job. It never invokes per-site permission authorization. Once that Job ID exists, it is the sole completion authority. Every exit path calls `credential-target finish` for that exact workflow; it never discovers or deletes arbitrary sessions. A bounded wait preserves `pending_target` plus structured target health. It never accepts a proxy address, pairing code, Cookie, Secret value, development URL, or operator token. Linux sandboxes and generic macOS/Linux targets continue using the generic workflow below.
 
 Do not delegate a CUA model task to install the extension. The command is an idempotent Connector operation and creates no model run. This conditional integration does not replace the generic Linux/macOS unpacked workflow.
 If it returns `ready=true, connected=false`, continue device pairing and rerun the check afterward; this is installation readiness only and must not be reported as `browser_ready`.
 
-`prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides which UI action is actually needed. Do not reopen installation or permissions pages when the corresponding state is already ready.
+`prepare` performs local manifest and signed-artifact work without waiting for pairing or daemon health, so an orchestrator may run it while the user completes OAuth/pair approval. `status` decides whether installation/reload is needed and reports the required global HTTPS capability. Do not open Options as part of normal setup.
 
 On a generic macOS endpoint whose `browser.features` contains `activate`, run `browser activate` after `prepare`. `details.browser_activation.action=none` continues immediately; `action=reload` uses the extension's separate `RELOAD_SELF` lifecycle channel and succeeds only after the exact new build reports HELLO. `BROWSER_INSTALL_USER_ACTION_REQUIRED` means the private unpacked extension has never been loaded: run `open-install`, leave the revealed Finder item and Chrome page visible, and ask only for Chrome's one-time Load unpacked gesture. `BROWSER_RELOAD_USER_ACTION_REQUIRED` is the one-release transition from a legacy extension: ask only for one visible Reload or browser restart. Do not request macOS Accessibility permission for installation and do not use raw CDP, coordinates, screenshots, Profile edits, or Cookie APIs. Linux keeps the generic visible workflow, while my-cua keeps its Connector-owned CDP/UIA workflow.
 
-`open-install` returns a structured `load_unpacked` handoff and reveals the exact Agent-managed directory in Finder on macOS; it still reports `verified=false` until the heartbeat arrives. `open-permissions` likewise reports only that Chrome accepted an open request. Confirm visible state through the browser-control channel already provided for the target, and navigate explicitly when Chrome ignores the launch request.
+`open-install` returns a structured `load_unpacked` handoff and reveals the exact Agent-managed directory in Finder on macOS; it still reports `verified=false` until the heartbeat arrives. `open-permissions` is a legacy/manual diagnostic only and is not an installation step. Confirm install state through the browser-control channel already provided for the target.
 
 For an older compatible Agent, use the combined fallback:
 
@@ -141,7 +140,7 @@ credential-agent browser setup --user-data-dir /absolute/browser/user-data --tim
 
 Current Linux Agents also discover same-user running Chrome/Chromium processes, resolve symlink aliases, and merge their effective `--user-data-dir` automatically. Keep passing the canonical host-inspected directories for deterministic orchestration and compatibility with older Agents. A root AIO runtime uses `/root/.config/browser`; `/home/root` is only a compatibility symlink and must not produce a second browser profile. Never copy a Native Messaging manifest into that directory yourself; let Agent validate the directory and install the binding.
 
-Run `browser wait` or the legacy `browser setup` in a yielded terminal session because it waits for extension connection and permissions. While it waits:
+Run `browser wait --for connected` or the legacy `browser setup` in a yielded terminal session because it waits for extension connection. While it waits:
 
 1. Prefer the target Credential Agent Connector when it declares deterministic browser setup; otherwise use visible UI automation through browser/computer control when available.
 2. In `unpacked` mode only, use semantic labels such as `开发者模式`, `Developer mode`, `加载未打包的扩展程序`, `Load unpacked`, `选择文件夹`, and `Select Folder`.
@@ -149,11 +148,11 @@ Run `browser wait` or the legacy `browser setup` in a yielded terminal session b
 4. In either managed mode, never enter developer mode or select a directory. If the managed extension is absent, stop on the Connector/Agent policy or release error. In my-cua unpacked mode, let the Connector own these actions instead of duplicating them here.
 5. If UI automation is unavailable, leave the detected browser and the required page open and ask for the single minimum action described in the browser reference.
 6. Do not ask the user to return to the terminal or type that installation is complete. Let Agent heartbeat detection continue.
-7. On the extension options page, activate only the exact requested site permission control (or the bounded “enable supported sites” capability control), verify the displayed origins match Agent-delivered policy, then let the Agent validate permissions.
+7. Do not open the extension Options page or request/remove per-site permissions. The required `https://*/*` capability is established by installation; Options is read-only diagnosis.
 
-Site support is controlled by Credential Vault dynamic policy, not by an extension build-time registry. Trust only policies that the Agent fetched and verified. The extension heartbeat reports cached policy digests and granted origins; do not treat it as the policy authority or hardcode site names/counts. On a device-only cloud endpoint, a site's policy may first arrive while its target Sync Job is being processed. A compatible Agent sends a metadata-only `UPDATE_SITE_POLICY`, keeps the same Job active until the extension heartbeat confirms the exact digest and origins are authorized, and only then sends the Cookie-bearing Restore task. If Agent opens the permission page, approve only the exact origins displayed for that policy; do not create a second Job.
+Site support is controlled by Credential Vault dynamic policy, not by an extension build-time registry. Trust only policies that the Agent fetched and verified. The extension heartbeat reports cached policy digests and origins for which `chrome.permissions.contains()` is effective; do not treat it as the policy authority or hardcode site names/counts. On a device-only cloud endpoint, a site's policy may first arrive while its target Sync Job is being processed. A compatible Agent sends a metadata-only `UPDATE_SITE_POLICY`; with normal Site access the future exact HTTPS origin is immediately authorized by the required wildcard, then the same Job proceeds to the Cookie-bearing Restore task. If Chrome withholds Site access, keep the same Job fail-closed and report `HOST_PERMISSION_REQUIRED`; do not request permission or create a second Job.
 
-`启用全部支持的网站` is capability authorization, not a request to sync every site. For a user request naming GitHub, invoke selected-site sync for GitHub only. Use `browser sync --all` only when the user explicitly requests all supported authenticated sites.
+The required HTTPS capability is not a request to sync every site. For a user request naming GitHub, invoke selected-site sync for GitHub only. Use `browser sync --all` only when the user explicitly requests all supported authenticated sites.
 
 Stop automation immediately on an unexpected permission dialog, locked desktop, disconnected remote desktop, or uncertain target directory.
 
@@ -181,22 +180,11 @@ For Agent orchestration, once the exact target and site list have already been s
 
 Treat JSONL as a stage protocol, not localized text: retain `operation_id`, read each phase `status` and `duration_ms`, and wait for the final `result`. For browser sync, inspect `details.policies.checked`, `already_current`, and `updated`; `updated=0` with every checked policy already current means Agent safely skipped policy writes and the 30-second policy heartbeat wait. This is not a skipped login capture or delivery.
 
-Keep the source sync process in a foreground/yielded session and consume JSONL incrementally. As soon as the `create_sync_job` phase succeeds, retain `details.job.id` and immediately inspect the target's own browser status and visible tabs through whatever execution/browser channel was provided for that target. Do this while the same source process continues waiting; do not wait for its fixed delivery window to expire first. If the target shows the exact policy-origin permission page, complete that visible user-gesture flow and let the original Job continue. This is upper-level orchestration and must not depend on a Sandbox Skill or assume the target is Linux.
+Keep the source sync process in a foreground/yielded session and consume JSONL incrementally. As soon as the `create_sync_job` phase succeeds, retain `details.job.id`. If the Job reports `waiting_permission`, inspect the target's browser status read-only while the same source process continues waiting; do not wait for its fixed delivery window to expire first. Treat this as Chrome Site-access withholding, not a signal to open Options or call a permission API. This upper-level orchestration must not depend on a Sandbox Skill or assume the target is Linux.
 
-For a CUA Adapter, start `credential-target browser-authorize-begin` immediately after `create_sync_job`, then run `browser-network-ensure` and observe the returned operation with `browser-authorize-watch`. The permission mutation is server-side and survives an HTTP client disconnect; watch is read-only and must not replay begin. The network call uses only the dynamic policy's validation URL and an instance-side server-configured fallback proxy, never a caller-supplied proxy. If no fallback is configured, structured `unreachable` is advisory while the same authoritative Job continues.
+For a CUA Adapter, run only `browser-network-ensure` after `create_sync_job`. The network call uses only the dynamic policy's validation URL and an instance-side server-configured fallback proxy, never a caller-supplied proxy. If no fallback is configured, structured `unreachable` is advisory while the same authoritative Job continues. Do not call the compatibility `browser-authorize-*` actions from the normal sync path.
 
 If the target reports `waiting_network` / `browser_network_unreachable`, leave the original Job active. After the Connector restores target reachability, the target Agent reports `resumed` and runs `VALIDATE_SITE` only. Do not repeat Restore, capture, Delivery Grant issuance, or `browser sync`.
-
-For a CUA target, use the request-scoped Adapter operation while the same source process remains active:
-
-```text
-python3 /absolute/path/cua.py credential-target browser-authorize-begin --workflow-id ID SITE...
-```
-
-This my-cua-specific command is only an adapter around Connector probes and the
-exact Chrome permission gesture. It does not change this Skill's generic Agent
-workflow, does not capture Cookie material, and must not be used for Linux
-sandboxes or non-CUA endpoints.
 
 If the source command finishes with `pending_target`, continue the exact Job instead of resubmitting the browser capture:
 

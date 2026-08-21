@@ -40,6 +40,12 @@ machine may create a Vault Job. Only the Adapter may map the workflow to a my-cu
 is idempotent and may delete only the exact temporary session created by that
 workflow.
 
+`browser-authorize-begin/watch` are compatibility observations only. They may
+verify that the required HTTPS capability is effective for the requested
+signed Policy sites, but must not open Options, call
+`chrome.permissions.request/remove()`, or drive an Allow/Deny prompt. New
+normal sync orchestration does not call them.
+
 The explicit Agent path is the already verified source/personal Agent. The
 Adapter may use it only for the encrypted automatic pair-relay approval; it
 must never upload the binary, read source browser data, or infer another Agent
@@ -58,8 +64,8 @@ Security requirements:
 - `mode=device` must not initialize Chrome or the browser extension.
 - Site commands accept exact policy site IDs only. They never accept `all` or
   a caller-supplied proxy.
-- A timed-out mutation is queried by workflow/operation ID; it is not blindly
-  replayed.
+- A timed-out compatibility observation is queried by workflow/operation ID;
+  it is not blindly replayed.
 - `workflow_id`, Connector `operation_id`, Vault `job_id`, and Identity
   `device_id` are distinct and must never be substituted for one another.
 

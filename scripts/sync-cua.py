@@ -320,7 +320,6 @@ def run(args: argparse.Namespace) -> dict:
     required_features = {
         "pair-relay-v1",
         "browser-unpacked-ensure",
-        "browser-authorize-v1",
         "browser-network-ensure-v1",
         "health-v1",
     }
@@ -384,36 +383,6 @@ def run(args: argparse.Namespace) -> dict:
                 source_result = wait_jsonl_result(source, source_events, deadline, allow_failure_result=True)
                 raise WorkflowError("SYNC_JOB_MISSING", "Source Agent did not create an authoritative Sync Job.")
 
-            operation_id = ""
-            try:
-                authorization = run_adapter_json(
-                    adapter_command(
-                        target_adapter,
-                        "browser-authorize-begin",
-                        "--workflow-id",
-                        workflow_id,
-                        *sites,
-                        "--timeout-seconds",
-                        "30",
-                    ),
-                    min(35, max(2, int(deadline - time.monotonic()))),
-                    "TARGET_AUTHORIZATION_FAILED",
-                )
-                authorization_data = authorization.get("data") if isinstance(authorization.get("data"), dict) else {}
-                operation = authorization_data.get("operation") if isinstance(authorization_data.get("operation"), dict) else authorization_data
-                operation_id = str(operation.get("operation_id") or "").strip()
-                if not operation_id:
-                    raise WorkflowError(
-                        "TARGET_AUTHORIZATION_FAILED",
-                        "CUA did not return an authorization operation id.",
-                    )
-            except WorkflowError as exc:
-                warnings.append(advisory_warning(
-                    "target_authorize",
-                    "TARGET_AUTHORIZATION_ASSIST_UNAVAILABLE",
-                    upstream_code=exc.code,
-                ))
-
             _network, network_warning = observe_target_network(
                 target_adapter,
                 workflow_id,
@@ -422,39 +391,6 @@ def run(args: argparse.Namespace) -> dict:
             )
             if network_warning:
                 warnings.append(network_warning)
-
-            if operation_id:
-                authorization_observation_seconds = max(
-                    1,
-                    min(90, int(deadline - time.monotonic()) - 2),
-                )
-                try:
-                    run_adapter_json(
-                        adapter_command(
-                            target_adapter,
-                            "browser-authorize-watch",
-                            "--operation-id",
-                            operation_id,
-                            "--timeout-seconds",
-                            str(authorization_observation_seconds),
-                            "--poll-interval-ms",
-                            "500",
-                        ),
-                        authorization_observation_seconds + 2,
-                        "TARGET_AUTHORIZATION_FAILED",
-                    )
-                    emit({
-                        "schema_version": 1,
-                        "type": "phase",
-                        "phase": "target_authorize",
-                        "status": "succeeded",
-                    })
-                except WorkflowError as exc:
-                    warnings.append(advisory_warning(
-                        "target_authorize",
-                        "TARGET_AUTHORIZATION_OBSERVATION_INCOMPLETE",
-                        upstream_code=exc.code,
-                    ))
             source_result = wait_jsonl_result(source, source_events, deadline, allow_failure_result=True)
         finally:
             stop_process(source)

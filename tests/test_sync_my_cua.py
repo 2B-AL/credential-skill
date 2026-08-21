@@ -80,13 +80,11 @@ class SyncMyCuaTests(unittest.TestCase):
             commands.append(command)
             if "capabilities" in command:
                 return {"data": {"transport": "direct_dev", "features": [
-                    "pair-relay-v1", "browser-unpacked-ensure", "browser-authorize-v1",
+                    "pair-relay-v1", "browser-unpacked-ensure",
                     "browser-network-ensure-v1", "health-v1",
                 ]}}
             if "begin" in command:
                 return {"data": {"device_id": "device-1", "workflow_id": "workflow-1", "browser_extension_ready": True, "browser_connected": True}}
-            if "browser-authorize-begin" in command:
-                return {"data": {"operation_id": "operation-1"}}
             if "health" in command:
                 return {"data": {"healthy": False}}
             return {"data": {"finished": True}}
@@ -123,13 +121,11 @@ class SyncMyCuaTests(unittest.TestCase):
             commands.append(command)
             if "capabilities" in command:
                 return {"data": {"transport": "direct_dev", "features": [
-                    "pair-relay-v1", "browser-unpacked-ensure", "browser-authorize-v1",
+                    "pair-relay-v1", "browser-unpacked-ensure",
                     "browser-network-ensure-v1", "health-v1",
                 ]}}
             if "begin" in command:
                 return {"data": {"device_id": "device-1", "workflow_id": "workflow-1", "browser_extension_ready": True, "browser_connected": True}}
-            if "browser-authorize-begin" in command:
-                raise sync_my_cua.WorkflowError("CONNECTOR_BUSY", "authorization assist unavailable")
             return {"data": {"finished": True}}
 
         args = argparse.Namespace(agent_path="/agent", target_adapter="/cua.py", desktop_id=None, site=["github"], timeout_seconds=120)
@@ -153,8 +149,9 @@ class SyncMyCuaTests(unittest.TestCase):
         self.assertEqual(result["job_id"], "job-1")
         self.assertEqual(
             [warning["code"] for warning in result["warnings"]],
-            ["TARGET_AUTHORIZATION_ASSIST_UNAVAILABLE", "TARGET_NETWORK_ASSIST_UNAVAILABLE"],
+            ["TARGET_NETWORK_ASSIST_UNAVAILABLE"],
         )
+        self.assertFalse(any("browser-authorize" in command for command in commands))
         cleanup = [command for command in commands if "finish" in command]
         self.assertEqual(len(cleanup), 1)
         self.assertTrue(process.stopped)

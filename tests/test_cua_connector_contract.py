@@ -26,14 +26,15 @@ class CuaConnectorContractTests(unittest.TestCase):
         self.assertIn("credential-browser ensure", command_map)
         self.assertNotIn("# Unmanaged Windows CUA", command_map)
 
-    def test_target_permission_preparation_keeps_the_original_sync_job(self):
+    def test_target_policy_preparation_keeps_the_original_sync_job(self):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         browser = (ROOT / "references" / "browser-installation.md").read_text(encoding="utf-8")
         command_map = (ROOT / "references" / "agent-command-map.md").read_text(encoding="utf-8")
         self.assertIn("metadata-only `UPDATE_SITE_POLICY`", skill)
-        self.assertIn("keeps the same Job active", skill)
-        self.assertIn("let the same Job continue", browser)
-        self.assertIn("only then runs Restore in the same Job", command_map)
+        self.assertIn("the same Job proceeds", skill)
+        self.assertIn("the same Job proceeds to Restore", browser)
+        self.assertIn("then runs Restore in the same Job", command_map)
+        self.assertIn('host_permissions: ["https://*/*"]', browser)
         self.assertNotIn("with its restore task", skill)
 
     def test_cua_pair_auto_and_reset_stay_adapter_scoped(self):
@@ -48,14 +49,14 @@ class CuaConnectorContractTests(unittest.TestCase):
         self.assertIn("INVOCATION_NOT_FOUND", troubleshooting)
         self.assertIn("pair_ready=true", troubleshooting)
 
-    def test_cua_fast_path_uses_one_job_async_authorization_and_policy_bounded_network(self):
+    def test_cua_fast_path_uses_one_job_and_policy_bounded_network(self):
         script = (ROOT / "scripts" / "sync-cua.py").read_text(encoding="utf-8")
         self.assertIn('"begin",', script)
         self.assertIn('"--mode",', script)
         self.assertIn('"create_sync_job"', script)
-        self.assertIn('"browser-authorize-begin"', script)
         self.assertIn('"browser-network-ensure"', script)
-        self.assertIn('"browser-authorize-watch"', script)
+        self.assertNotIn('"browser-authorize-begin"', script)
+        self.assertNotIn('"browser-authorize-watch"', script)
         self.assertIn('"job", "wait", job_id', script)
         self.assertIn("TARGET_NETWORK_ASSIST_UNAVAILABLE", script)
         self.assertIn("TARGET_NETWORK_UNREACHABLE", script)
