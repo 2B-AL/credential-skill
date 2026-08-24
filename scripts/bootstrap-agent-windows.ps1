@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ArtifactBaseURL = "https://al-artifacts.tos-ap-southeast-1.volces.com",
+    [string]$ArtifactBaseURL = "https://al-artifacts-bj.tos-cn-beijing.volces.com",
     [string]$PublicKey = "FYJ6pbAiSmmE6UnVv4LtKhQaJ3cxJgxyQrZZSAHsosc=",
     [string]$InstallPath = "",
     [switch]$VerifyOnly,

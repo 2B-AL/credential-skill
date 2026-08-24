@@ -136,7 +136,7 @@ credential-agent file remove --to DEVICE REF
 Staged setup/repair commands for current Agents:
 
 ```text
-credential-agent browser prepare [--user-data-dir DIR ...] --output json
+credential-agent browser prepare --artifact-base-url https://al-artifacts-bj.tos-cn-beijing.volces.com [--user-data-dir DIR ...] --output json
 credential-agent browser status --output json
 credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install --output json
@@ -149,7 +149,7 @@ Select the preparation contract from Agent capabilities or the target Connector:
 
 ```text
 # Personal computers and Linux sandboxes using the generic workflow
-credential-agent browser prepare --distribution-mode unpacked --output json
+credential-agent browser prepare --artifact-base-url https://al-artifacts-bj.tos-cn-beijing.volces.com --distribution-mode unpacked --output json
 
 # Development my-cua: let its Connector own unpacked prepare/install/reload
 python3 <my-cua-dev-skill-dir>/scripts/cua.py credential-browser ensure
@@ -160,13 +160,14 @@ python3 <skill-directory>/scripts/sync-my-cua.py \
 
 # Only a target explicitly configured for a published Store item
 credential-agent browser prepare --distribution-mode managed_store \
+  --artifact-base-url https://al-artifacts-bj.tos-cn-beijing.volces.com \
   --extension-id STORE_ITEM_ID \
   --expected-build-id RELEASE_BUILD_ID \
   --expected-manifest-version NUMERIC_VERSION \
   --output json
 
 # Enterprise-managed Windows only
-credential-agent browser prepare --distribution-mode managed_self_hosted --output json
+credential-agent browser prepare --artifact-base-url https://al-artifacts-bj.tos-cn-beijing.volces.com --distribution-mode managed_self_hosted --output json
 ```
 
 Use the composite fast path directly from the target baseline. Do not precede it with the standalone `pair-auto` or `credential-browser ensure`; those commands remain individual repair/inspection operations. The adapter owns one temporary session, always cleans it up, and returns authoritative Job state with bounded direct Connector health when the Job remains pending. After `create_sync_job`, only the Connector network operation is an advisory accelerator; the same Job alone decides the final result. The composite does not call permission-authorization actions.

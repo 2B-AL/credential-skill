@@ -67,7 +67,7 @@ Follow [browser-installation.md](references/browser-installation.md).
 For an Agent exposing the staged browser commands, prefer this state-driven sequence:
 
 ```text
-credential-agent browser prepare [--user-data-dir DIR ...] --output json
+credential-agent browser prepare --artifact-base-url https://al-artifacts-bj.tos-cn-beijing.volces.com [--user-data-dir DIR ...] --output json
 credential-agent browser status --output json
 credential-agent browser activate --timeout 2m --output json     # no-op or background self-reload
 credential-agent browser open-install --output json       # only when activate requires first install

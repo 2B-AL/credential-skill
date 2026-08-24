@@ -24,7 +24,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 
-DEFAULT_ARTIFACT_BASE = "https://al-artifacts.tos-ap-southeast-1.volces.com"
+DEFAULT_ARTIFACT_BASE = "https://al-artifacts-bj.tos-cn-beijing.volces.com"
 DEFAULT_PUBLIC_KEY = "FYJ6pbAiSmmE6UnVv4LtKhQaJ3cxJgxyQrZZSAHsosc="
 MAX_METADATA_BYTES = 1 << 20
 MAX_PACKAGE_BYTES = 512 << 20

@@ -506,7 +506,7 @@ Agent 默认安装位置：
 Agent 和浏览器扩展制品默认从以下公开 HTTPS Origin 获取：
 
 ```text
-https://al-artifacts.tos-ap-southeast-1.volces.com
+https://al-artifacts-bj.tos-cn-beijing.volces.com
 ```
 
 下载不需要向 Skill 提供 TOS AK/SK。bootstrap 会验证签名清单和制品哈希，不能只依赖 HTTPS 地址本身。

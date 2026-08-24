@@ -11,6 +11,19 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_ARTIFACT_BASE = "https://al-artifacts-bj.tos-cn-beijing.volces.com"
+
+
+def browser_prepare_command(agent):
+    return [
+        str(agent),
+        "browser",
+        "prepare",
+        "--artifact-base-url",
+        DEFAULT_ARTIFACT_BASE,
+        "--output",
+        "json",
+    ]
 
 
 def safe_agent(path):
@@ -86,7 +99,7 @@ def main():
         print(json.dumps({"schema_version": 1, "status": "failed", "error": {"code": "SOURCE_ENROLLMENT_REQUIRED"}}))
         return 1
     if not args.skip_browser:
-        prepared = run([str(agent), "browser", "prepare", "--output", "json"], min(args.timeout_seconds, 180))
+        prepared = run(browser_prepare_command(agent), min(args.timeout_seconds, 180))
         if prepared.returncode:
             print(json.dumps({"schema_version": 1, "status": "failed", "error": {"code": "SOURCE_BROWSER_PREPARE_FAILED"}}))
             return 1

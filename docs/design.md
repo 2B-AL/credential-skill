@@ -375,7 +375,7 @@ credential-agent status --output json
 默认 Artifact Base URL：
 
 ```text
-https://al-artifacts.tos-ap-southeast-1.volces.com
+https://al-artifacts-bj.tos-cn-beijing.volces.com
 ```
 
 首次安装流程：
@@ -485,7 +485,7 @@ credential-agent status --output json
 credential-agent devices --output json
 credential-agent doctor --strict --output json
 credential-agent setup --skip-browser --event-format jsonl
-credential-agent browser prepare --output json
+credential-agent browser prepare --artifact-base-url https://al-artifacts-bj.tos-cn-beijing.volces.com --output json
 credential-agent browser status --output json
 credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install
@@ -612,7 +612,7 @@ Skill 只能直接控制当前拥有执行通道的设备。
 执行：
 
 ```bash
-credential-agent browser prepare --output json
+credential-agent browser prepare --artifact-base-url https://al-artifacts-bj.tos-cn-beijing.volces.com --output json
 ```
 
 Agent 负责：

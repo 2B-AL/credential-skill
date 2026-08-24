@@ -26,7 +26,7 @@ Only one browser needs to be installed. A missing manifest for an unused default
 Current Agents expose a staged, machine-readable workflow:
 
 ```text
-credential-agent browser prepare [--user-data-dir DIR ...] --output json
+credential-agent browser prepare --artifact-base-url https://al-artifacts-bj.tos-cn-beijing.volces.com [--user-data-dir DIR ...] --output json
 credential-agent browser status --output json
 credential-agent browser activate --timeout 2m --output json
 credential-agent browser open-install --output json
